@@ -21,7 +21,7 @@ class RoleSeeder extends Seeder
             'branch-admin',
             'branch-employee',
             'branch-delivery',
-            'warehouse-user',
+            'warehouse-employee',
         ];
 
         foreach ($roles as $role){

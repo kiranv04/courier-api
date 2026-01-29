@@ -13,7 +13,9 @@ class BranchController extends Controller
         $branches = Branch::select('id', 'name', 'code', 'location_id', 'address', 'phone', 'email', 'yield_ratio', 'is_active')
             ->orderBy('id')
             ->get();
-        return response()->json($branches);
+        return response()->json([
+            'data' => $branches
+        ]);
     }
 
     public function store(Request $request)

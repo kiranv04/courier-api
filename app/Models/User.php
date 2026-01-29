@@ -24,6 +24,10 @@ class User extends Authenticatable
         'email',
         'password',
         'must_change_password',
+        'owner_type',
+        'owner_id',
+        'rel_id',
+        'rel_type',
         'is_active',
     ];
 

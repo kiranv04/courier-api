@@ -15,10 +15,11 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('code')->unique();
-            $table->unsignedBigInteger('location_id');
+            $table->foreignId('location_id')->constrained('locations');
             $table->string('address'); 
             $table->string('phone')->nullable();
             $table->string('email')->nullable();
+            $table->decimal('yield_ratio', 5, 2)->default(0.00);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

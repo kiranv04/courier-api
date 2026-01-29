@@ -29,7 +29,7 @@ class LocationController extends Controller
         $data = $request->validate([
             'state_id' => 'required|exists:states,id',
             'name' => 'required|string|max:125',
-            'short_code' => 'required|string|max:3|unique:locations,short_code',
+            'short_code' => 'required|string|max:4|unique:locations,short_code',
             'pincode' => 'required|string|max:6|unique:locations,pincode',
         ]);
 
@@ -57,10 +57,10 @@ class LocationController extends Controller
     public function update(Request $request, Location $location)
     {
         $data = $request->validate([
-            'state_id' => 'required|exists:states,id' . $location->id,
+            'state_id' => 'required|exists:states,id',
             'name' => 'required|string|max:125',
-            'short_code' => 'required|string|max:3|unique:locations,short_code' . $location->id,
-            'pincode' => 'required|string|max:6|unique:locations,pincode' . $location->id,
+            'short_code' => 'required|string|max:4|unique:locations,short_code,' . $location->id,
+            'pincode' => 'required|string|max:6|unique:locations,pincode,' . $location->id,
         ]);
 
         $location->update($data);

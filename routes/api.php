@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\StateController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,4 +25,6 @@ Route::middleware('auth:sanctum', 'role:super-admin|admin')->group(function () {
    Route::apiResource('users', UserController::class);
    Route::post('/users/{id}/activate', [UserController::class, 'activate']);
    Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
+   Route::apiResource('warehouses', WarehouseController::class);
+   Route::post('/warehouses/{id}/activate', [WarehouseController::class, 'activate']);
 });

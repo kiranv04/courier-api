@@ -16,6 +16,8 @@ class SuperAdminSeeder extends Seeder
         $user = User::updateOrCreate(
             ['email' => 'superadmin@vkenterprises.com'],
             [
+                'owner_id' => 0,
+                'owner_type' => 'system',
                 'name' => 'Super Admin',
                 'password' => bcrypt('SuperAdmin@123'), // change anytime
                 'must_change_password' => false,

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\BranchController;
+use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\StateController;
 use App\Http\Controllers\Api\UserController;
@@ -27,4 +28,13 @@ Route::middleware('auth:sanctum', 'role:super-admin|admin')->group(function () {
    Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
    Route::apiResource('warehouses', WarehouseController::class);
    Route::post('/warehouses/{id}/activate', [WarehouseController::class, 'activate']);
+});
+
+Route::middleware('auth:sanctum', 'role:branch-admin|branch-employee')->group(function () {
+   Route::apiResource('branches.users', UserController::class)->shallow();
+});
+
+Route::middleware('auth:sanctum', 'role:super-admin|admin|branch-admin|branch-employee')->group(function () {
+   Route::apiResource('customers', CustomerController::class);
+   Route::post('/customers/{id}/activate', [CustomerController::class, 'activate']);
 });

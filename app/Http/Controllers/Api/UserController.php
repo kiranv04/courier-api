@@ -113,7 +113,7 @@ class UserController extends Controller
 
     public function resetPassword(Request $request, User $user): JsonResponse
     {
-        if (!$user->hasAnyRole(['branch-admin', 'branch-employee', 'branch-delivery'])) {
+        if (!$user->hasAnyRole(['branch-admin', 'branch-employee', 'branch-delivery', 'warehouse-admin', 'warehouse-employee'])) {
             return response()->json(['message' => 'Cannot reset this user type'], 403);
         }
 

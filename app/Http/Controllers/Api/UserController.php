@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\User;
 use App\Http\Controllers\Controller;
+use App\Models\Branch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -18,7 +19,7 @@ class UserController extends Controller
        $query = User::query();
 
         if ($request->has('role')) {
-            $query->role($request->query('role')); // Spatie magic
+            $query->role($request->query('role'));
         }
 
         return response()->json($query->with('roles')->paginate(20));
@@ -130,6 +131,19 @@ class UserController extends Controller
             'message' => 'Password reset successfully',
             'new_password' => $newPassword,
             'user' => $user->load('roles')
+        ]);
+    }
+
+    public function branchUsers($branchId)
+    {
+        $users = User::role(['branch-delivery', 'branch-employee'])
+            ->where('owner_type', Branch::class)
+            ->where('owner_id', $branchId)
+            ->with('roles')
+            ->get();
+
+        return response()->json([
+            'data' => $users
         ]);
     }
 }

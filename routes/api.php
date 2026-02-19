@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\BranchController;
+use App\Http\Controllers\Api\CftController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\StateController;
@@ -28,6 +29,8 @@ Route::middleware('auth:sanctum', 'role:super-admin|admin')->group(function () {
    Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
    Route::apiResource('warehouses', WarehouseController::class);
    Route::post('/warehouses/{id}/activate', [WarehouseController::class, 'activate']);
+   Route::apiResource('cfts', CftController::class);
+   Route::post('/cfts/{id}/activate', [CftController::class, 'activate']);
 });
 
 Route::middleware('auth:sanctum', 'role:super-admin|admin|branch-admin|branch-employee')->group(function () {

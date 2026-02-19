@@ -7,14 +7,22 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
+use function PHPSTORM_META\type;
+
 class CustomerController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $customers = Customer::with('addresses')->get();
+        $query = Customer::query();
+
+        if ($request->has('type')) {
+            $query->where('customer_type', $request->type);
+        }
+
+        $customers = $query->with('addresses')->get();
 
         return response()->json([
             'data' => $customers
@@ -35,6 +43,8 @@ class CustomerController extends Controller
             'pan_image_path' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             'aadhar_number' => 'nullable|string|max:50',
             'aadhar_image_path' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'contact_person' => 'nullable|string|max:150',
+            'contact_phone' => 'nullable|string|max:20',
             'same_address' => 'boolean',
             // Billing – always required
             'billing_name'            => 'required|string|max:150',
@@ -112,7 +122,7 @@ class CustomerController extends Controller
                 'state_id'            => $data['shipping_state_id'],
                 'pincode'             => $data['shipping_pincode'],
                 'gst_number'          => $data['gst_number'] ?? null,
-                'is_default_pickup'   => true,
+                'is_default_pickup'   => false,
             ];
 
             $customer->addresses()->create($shippingAddress);

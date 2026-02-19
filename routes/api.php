@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
    Route::get('/me', [AuthController::class, 'me']);
-//    Route::post('/logout', [AuthController::class, 'logout']);
+   Route::post('/logout', [AuthController::class, 'logout']);
    Route::post('/change-password', [AuthController::class, 'changePassword']);
    Route::apiResource('locations', LocationController::class);
    Route::post('/locations/{id}/activate', [LocationController::class, 'actrivate']);
@@ -30,11 +30,9 @@ Route::middleware('auth:sanctum', 'role:super-admin|admin')->group(function () {
    Route::post('/warehouses/{id}/activate', [WarehouseController::class, 'activate']);
 });
 
-Route::middleware('auth:sanctum', 'role:branch-admin|branch-employee')->group(function () {
-   Route::apiResource('branches.users', UserController::class)->shallow();
-});
-
 Route::middleware('auth:sanctum', 'role:super-admin|admin|branch-admin|branch-employee')->group(function () {
    Route::apiResource('customers', CustomerController::class);
    Route::post('/customers/{id}/activate', [CustomerController::class, 'activate']);
+   Route::apiResource('users', UserController::class);
+   Route::get('/users/branch/{branchId}', [UserController::class, 'branchUsers']);
 });

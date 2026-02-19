@@ -25,8 +25,8 @@ class BranchController extends Controller
             'code' => 'required|string|max:50|unique:branches,code',
             'location_id' => 'required|exists:locations,id',
             'address' => 'required|string|max:500',
-            'phone' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:100',
+            'phone' => 'required|string|max:10',
+            'email' => 'required|email|max:100',
             'yield_ratio' => 'required|numeric|min:0|max:100',
         ]);
 

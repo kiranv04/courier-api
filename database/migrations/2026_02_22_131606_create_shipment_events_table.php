@@ -18,7 +18,7 @@ return new class extends Migration
             $table->tinyInteger('entity_id')->nullable();
             $table->string('entity_type')->nullable();
             $table->text('notes')->nullable();
-            $table->foreignId('created_by')->constrained('users')->onDelete('set null');
+            $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamps();
         });
     }

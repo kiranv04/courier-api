@@ -44,7 +44,7 @@ return new class extends Migration
             $table->string('in_favor_of')->nullable();
             $table->string('payable_at')->nullable();
             $table->decimal('collectable_amount', 10, 2)->nullable();
-            $table->foreignId('created_by')->constrained('users')->onDelete('set null');
+            $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('booked_at')->nullable();
             $table->timestamps();
         });

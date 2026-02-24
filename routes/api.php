@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CftController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\ShipmentController;
 use App\Http\Controllers\Api\StateController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseController;
@@ -38,4 +39,21 @@ Route::middleware('auth:sanctum', 'role:super-admin|admin|branch-admin|branch-em
    Route::post('/customers/{id}/activate', [CustomerController::class, 'activate']);
    Route::apiResource('users', UserController::class);
    Route::get('/users/branch/{branchId}', [UserController::class, 'branchUsers']);
+   Route::apiResource('shipments', ShipmentController::class)->only(['index', 'store', 'show']);
+   Route::patch('/shipments/{shipment}/status', [ShipmentController::class, 'updateStatus']);
+   Route::apiResource('cfts', CftController::class);
+});
+
+Route::middleware('auth:sanctum', 'role:warehouse-admin')->group(function () {
+   Route::apiResource('warehouses', WarehouseController::class);
+   Route::get('/users/warehouse/{warehouseId}', [UserController::class, 'warehouseUsers']);
+   Route::apiResource('users', UserController::class);
+});
+
+// Public tracking endpoint - no authentication required
+Route::get('/track/{awb}', function (string $awb) {
+    $shipment = \App\Models\Shipment::where('awb_number', $awb)
+        ->with(['events.entity'])
+        ->firstOrFail();
+    return (new \App\Http\Controllers\Api\ShipmentController)->tracking($shipment);
 });

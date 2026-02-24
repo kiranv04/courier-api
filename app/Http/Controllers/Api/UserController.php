@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\User;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -139,6 +140,19 @@ class UserController extends Controller
         $users = User::role(['branch-delivery', 'branch-employee'])
             ->where('owner_type', Branch::class)
             ->where('owner_id', $branchId)
+            ->with('roles')
+            ->get();
+
+        return response()->json([
+            'data' => $users
+        ]);
+    }
+
+    public function warehouseUsers($warehouseId)
+    {
+        $users = User::role(['warehouse-employee'])
+            ->where('owner_type', Warehouse::class)
+            ->where('owner_id', $warehouseId)
             ->with('roles')
             ->get();
 

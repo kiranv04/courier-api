@@ -37,6 +37,7 @@ class CustomerController extends Controller
         $data = $request->validate([
             'company_name' => 'required|string|max:255',
             'customer_type' => 'required|in:cash,corporate',
+            'type' => 'required|in:individual,company',
             'gst_number' => 'nullable|string|max:50',
             'gst_image_path' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             'pan_number' => 'nullable|string|max:50',

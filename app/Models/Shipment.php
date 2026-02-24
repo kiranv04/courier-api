@@ -28,7 +28,9 @@ class Shipment extends Model
     protected static function booted(): void
     {
         static::creating(function (Shipment $shipment) {
-            $shipment->awb_number = self::generateAwb();
+            if (empty($shipment->awb_number)) {
+                $shipment->awb_number = self::generateAwb();
+            }
         });
     }
 

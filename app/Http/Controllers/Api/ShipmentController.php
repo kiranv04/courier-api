@@ -135,6 +135,7 @@ class ShipmentController extends Controller
             $shipment = Shipment::create([
                 'branch_id'             => auth()->user()->rel_id,
                 'customer_id'           => $cust['customerId'] ?? null,
+                'awb_number'            => $data['trackingNumber'] ?? null,
                 // 'customer_type'         => $cust['customerType'],
                 'status'                => $data['status'],
                 'service_type'          => $s['serviceType'] ?? null,
@@ -142,7 +143,7 @@ class ShipmentController extends Controller
                 'payment_mode'          => $s['paymentMode'] ?? null,
                 'customer_reference'    => $s['customerRef'] ?? null,
                 'parcel_content'        => $s['parcelContent'] ?? null,
-                'tracking_number'       => $s['trackingNumber'] ?? null,
+                // 'tracking_number'       => $s['trackingNumber'] ?? null,
 
                 'shipper_name'          => $sh['shipperName'],
                 'shipper_company_name'  => $sh['shipperCompany'] ?? null,

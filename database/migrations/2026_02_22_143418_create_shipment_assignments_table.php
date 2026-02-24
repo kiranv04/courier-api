@@ -14,8 +14,8 @@ return new class extends Migration
         Schema::create('shipment_assignments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('shipment_id')->constrained('shipments')->onDelete('cascade');
-            $table->foreignId('assigned_to')->constrained('users')->onDelete('set null');
-            $table->foreignId('assigned_by')->constrained('users')->onDelete('set null');
+            $table->foreignId('assigned_to')->nullable()->constrained('users')->onDelete('set null');
+            $table->foreignId('assigned_by')->nullable()->constrained('users')->onDelete('set null');
             $table->enum('assignment_type', ['pickup', 'linehaul', 'delivery'])->default('pickup');
             $table->enum('status', ['pending', 'accepted', 'completed', 'failed'])->default('pending');
             $table->timestamp('completed_at')->nullable();

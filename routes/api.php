@@ -43,6 +43,10 @@ Route::middleware('auth:sanctum')->group(function () {
    Route::middleware('role:super-admin|admin|branch-admin|branch-employee')->group(function () {
 
       Route::get('/users/branch/{branchId}', [UserController::class, 'branchUsers']);
+
+      Route::get('/cfts', [CftController::class, 'index']);
+
+      Route::get('/branches/{branch}', [BranchController::class, 'show']);
       
       Route::apiResource('customers', CustomerController::class);
       Route::post('/customers/{id}/activate', [CustomerController::class, 'activate']);

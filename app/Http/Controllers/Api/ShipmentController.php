@@ -43,6 +43,10 @@ class ShipmentController extends Controller
     {
         $data = $request->validate([
             'status'                  => 'required|in:draft,booked',
+            'branchId' => [
+                auth()->user()->hasRole('super-admin') ? 'required' : 'nullable',
+                'exists:branches,id'
+            ],
             'customer.customerId'     => 'nullable|exists:customers,id',
             'customer.customerType'   => 'required|in:cash,corporate',
             'service.serviceType'     => 'nullable|string',
@@ -133,7 +137,9 @@ class ShipmentController extends Controller
             $dod = $data['dodCodDetails'] ?? [];
 
             $shipment = Shipment::create([
-                'branch_id'             => auth()->user()->rel_id,
+                'branch_id' => auth()->user()->hasRole('super-admin')
+                    ? $data['branchId']
+                    : auth()->user()->owner_id,
                 'customer_id'           => $cust['customerId'] ?? null,
                 'awb_number'            => $data['trackingNumber'] ?? null,
                 // 'customer_type'         => $cust['customerType'],

@@ -29,16 +29,29 @@ class Shipment extends Model
     {
         static::creating(function (Shipment $shipment) {
             if (empty($shipment->awb_number)) {
-                $shipment->awb_number = self::generateAwb();
+                $shipment->awb_number = self::generateAwb($shipment->branch_id);
             }
         });
     }
 
-    private static function generateAwb(): string
+    private static function generateAwb(int $branchId): string
     {
-        $year = now()->year;
-        $last = self::whereYear('created_at', $year)->lockForUpdate()->count();
-        return 'VK-' . $year . '-' . str_pad($last + 1, 5, '0', STR_PAD_LEFT);
+        $now = now(); // now uses IST after the config change
+        $year = $now->format('y');   // 2-digit year: "25"
+        $month = $now->format('m');  // 2-digit month: "02"
+
+        $branchCode = \App\Models\Branch::where('id', $branchId)
+            ->value('code'); // single column fetch, no full model load
+
+        $count = self::where('branch_id', $branchId)
+            ->whereYear('created_at', $now->year)
+            ->whereMonth('created_at', $now->month)
+            ->lockForUpdate()
+            ->count();
+
+        $sequence = str_pad($count + 1, 5, '0', STR_PAD_LEFT);
+
+        return $branchCode . $year . $month . $sequence;
     }
 
     public function branch()

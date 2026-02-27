@@ -90,7 +90,7 @@ class ShipmentController extends Controller
             'parcels.*.height'      => 'required_if:service.service,Parcel|numeric',
             'parcels.*.weight'      => 'required_if:service.service,Parcel|numeric',
             'parcels.*.numBoxes'    => 'required_if:service.service,Parcel|integer|min:1',
-            'parcels.*.volWeight'   => 'required_if:service.service,Parcel|numeric',
+            // 'parcels.*.volWeight'   => 'required_if:service.service,Parcel|numeric',
 
             // Invoices - only required for Parcel service
             'invoices'                      => 'required_if:service.service,Parcel|nullable|array',

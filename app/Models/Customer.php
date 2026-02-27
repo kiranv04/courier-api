@@ -46,4 +46,9 @@ class Customer extends Model
 
         return sprintf('CUST-%06d', $nextNumber);
     }
+
+    public function printConfig()
+    {
+        return $this->hasOne(CustomerPrintConfig::class);
+    }
 }

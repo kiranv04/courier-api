@@ -4,7 +4,9 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CftController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\PrintConfigController;
 use App\Http\Controllers\Api\ShipmentController;
+use App\Http\Controllers\Api\ShipmentPdfController;
 use App\Http\Controllers\Api\StateController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseController;
@@ -50,9 +52,15 @@ Route::middleware('auth:sanctum')->group(function () {
       
       Route::apiResource('customers', CustomerController::class);
       Route::post('/customers/{id}/activate', [CustomerController::class, 'activate']);
+      Route::get('/customers/{customer}/print-config', [PrintConfigController::class, 'getForCustomer']);
+      Route::post('/customers/{customer}/print-config', [PrintConfigController::class, 'saveForCustomer']);
+      Route::delete('/customers/{customer}/print-config', [PrintConfigController::class, 'resetForCustomer']);
 
       Route::apiResource('shipments', ShipmentController::class)->only(['index', 'store', 'show']);
       Route::patch('/shipments/{shipment}/status', [ShipmentController::class, 'updateStatus']);
+      Route::post('/shipments/{shipment}/print-override', [PrintConfigController::class, 'saveOverride']); // Shipment print override
+      Route::get('/shipments/{shipment}/print-config', [PrintConfigController::class, 'getEffectiveForShipment']); // Effective config for a shipment (used by print modal)
+      Route::get('/shipments/{shipment}/pdf', [ShipmentPdfController::class, 'generate']); // PDF generation
    });
 
 

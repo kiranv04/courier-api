@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CftController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\PincodeController;
 use App\Http\Controllers\Api\PrintConfigController;
 use App\Http\Controllers\Api\ShipmentController;
 use App\Http\Controllers\Api\ShipmentPdfController;
@@ -90,6 +91,8 @@ Route::get('/track/{awb}', function (string $awb) {
         ->firstOrFail();
     return (new ShipmentController)->tracking($shipment);
 });
+
+Route::get('/pincodes/check', [PincodeController::class, 'check']);
 
 // Route::get('/debug-my-roles', function () {
 //     $user = auth('sanctum')->user();

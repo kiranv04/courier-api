@@ -36,7 +36,7 @@ class Shipment extends Model
 
     private static function generateAwb(int $branchId): string
     {
-        $now = now(); // now uses IST after the config change
+        $now = now();
         $year = $now->format('y');   // 2-digit year: "25"
         $month = $now->format('m');  // 2-digit month: "02"
 

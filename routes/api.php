@@ -57,7 +57,7 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::post('/customers/{customer}/print-config', [PrintConfigController::class, 'saveForCustomer']);
       Route::delete('/customers/{customer}/print-config', [PrintConfigController::class, 'resetForCustomer']);
 
-      Route::apiResource('shipments', ShipmentController::class)->only(['index', 'store', 'show']);
+      Route::apiResource('shipments', ShipmentController::class)->only(['index', 'store', 'show', 'update']);
       Route::patch('/shipments/{shipment}/status', [ShipmentController::class, 'updateStatus']);
       Route::post('/shipments/{shipment}/print-override', [PrintConfigController::class, 'saveOverride']); // Shipment print override
       Route::get('/shipments/{shipment}/print-config', [PrintConfigController::class, 'getEffectiveForShipment']); // Effective config for a shipment (used by print modal)

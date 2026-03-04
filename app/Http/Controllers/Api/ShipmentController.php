@@ -44,7 +44,7 @@ class ShipmentController extends Controller
         $data = $request->validate([
             'status'                  => 'required|in:draft,booked',
             'branchId' => [
-                auth()->user()->hasRole(['super-admin', 'admin']) ? 'required' : 'nullable',
+                auth()->user()->hasAnyRole(['super-admin', 'admin']) ? 'required' : 'nullable',
                 'exists:branches,id'
             ],
             'customer.customerId'     => 'nullable|exists:customers,id',
@@ -71,6 +71,7 @@ class ShipmentController extends Controller
 
             // Consignee
             'consignee.consigneeName'       => 'required|string',
+            'consignee.receiverName'        => 'required|string',
             'consignee.consigneePhone'      => 'nullable|string',
             'consignee.consigneeGst'        => 'nullable|string',
             'consignee.consigneeAddLine1'   => 'nullable|string',
@@ -122,10 +123,14 @@ class ShipmentController extends Controller
             'rates.dcc'                     => 'nullable|numeric',
             'rates.pickupcharges'           => 'nullable|numeric',
             'rates.deliverycharges'         => 'nullable|numeric',
+            'rates.otherCharges'            => 'nullable|numeric',
+            'rates.premiumCharges'          => 'nullable|numeric',
             'rates.total'                   => 'nullable|numeric',
             'rates.gst'                     => 'nullable|numeric',
             'rates.grandTotal'              => 'nullable|numeric',
         ]);
+
+        $clean = fn($val) => ($val === '' || $val === null) ? null : $val;
 
         try {
             DB::beginTransaction();
@@ -134,14 +139,14 @@ class ShipmentController extends Controller
             $sh = $data['shipper'];
             $con = $data['consignee'];
             $cust = $data['customer'];
-            $dod = $data['dodCodDetails'] ?? [];
+            $dod = $request->input('dodCodDetails', []);
 
             $shipment = Shipment::create([
-                'branch_id' => auth()->user()->hasRole(['super-admin', 'admin'])
+                'branch_id' => auth()->user()->hasAnyRole(['super-admin', 'admin'])
                     ? $data['branchId']
                     : auth()->user()->owner_id,
                 'customer_id'           => $cust['customerId'] ?? null,
-                'awb_number'            => $data['trackingNumber'] ?? null,
+                'awb_number'            => $s['trackingNumber'] ?? null,
                 // 'customer_type'         => $cust['customerType'],
                 'status'                => $data['status'],
                 'service_type'          => $s['serviceType'] ?? null,
@@ -149,7 +154,6 @@ class ShipmentController extends Controller
                 'payment_mode'          => $s['paymentMode'] ?? null,
                 'customer_reference'    => $s['customerRef'] ?? null,
                 'parcel_content'        => $s['parcelContent'] ?? null,
-                // 'tracking_number'       => $s['trackingNumber'] ?? null,
 
                 'shipper_name'          => $sh['shipperName'],
                 'shipper_company_name'  => $sh['shipperCompany'] ?? null,
@@ -163,6 +167,7 @@ class ShipmentController extends Controller
                 'shipper_pincode'       => $sh['shipperPincode'] ?? null,
 
                 'consignee_name'        => $con['consigneeName'],
+                'receiver_name'         => $con['receiverName'] ?? null,
                 'consignee_phone'       => $con['consigneePhone'] ?? null,
                 'consignee_gst'         => $con['consigneeGst'] ?? null,
                 'consignee_address_line1'         => $con['consigneeAddLine1'] ?? null,
@@ -198,7 +203,7 @@ class ShipmentController extends Controller
                     'height'     => $doc['height'],
                     'weight'     => $doc['weight'],
                     'num_boxes'  => 1,
-                    'volumetric_weight' => round(($doc['length'] * $doc['width'] * $doc['height']) / 27000, 2),
+                    // 'volumetric_weight' => round(($doc['length'] * $doc['width'] * $doc['height']) / 27000, 2),
                 ]);
             }
 
@@ -233,6 +238,8 @@ class ShipmentController extends Controller
                     'dcc'               => $data['rates']['dcc'] ?? 0,
                     'pickup_charges'    => $data['rates']['pickupcharges'] ?? 0,
                     'delivery_charges'  => $data['rates']['deliverycharges'] ?? 0,
+                    'other_charges'     => $data['rates']['otherCharges'] ?? 0,
+                    'premium_charges'   => $data['rates']['premiumCharges'] ?? 0,
                     'total'             => $data['rates']['total'] ?? 0,
                     'gst'               => $data['rates']['gst'] ?? 0,
                     'grand_total'       => $data['rates']['grandTotal'] ?? 0,
@@ -275,15 +282,18 @@ class ShipmentController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Shipment $shipment): JsonResponse
+    public function update(Request $request, Shipment $shipment)
     {
-        if ($shipment->status === 'booked') {
-            return response()->json(['message' => 'Booked shipments cannot be edited'], 403);
+        if (!in_array($shipment->status, ['draft', 'booked'])) {
+            return response()->json(['message' => 'Only draft or booked shipments can be edited'], 403);
         }
 
-        // Same validation as store()
         $data = $request->validate([
             'status'                  => 'required|in:draft,booked',
+            'branchId'                => [
+                auth()->user()->hasAnyRole(['super-admin', 'admin']) ? 'required' : 'nullable',
+                'exists:branches,id'
+            ],
             'customer.customerId'     => 'nullable|exists:customers,id',
             'customer.customerType'   => 'required|in:cash,corporate',
             'service.serviceType'     => 'nullable|string',
@@ -294,7 +304,6 @@ class ShipmentController extends Controller
             'service.trackingNumber'  => 'nullable|string',
             'specialInstruction'      => 'nullable|string',
 
-            // Shipper
             'shipper.shipperName'           => 'required|string',
             'shipper.shipperCompany'        => 'nullable|string',
             'shipper.shipperPhone'          => 'nullable|string',
@@ -306,7 +315,6 @@ class ShipmentController extends Controller
             'shipper.shipperState'          => 'nullable|string',
             'shipper.shipperPincode'        => 'nullable|string',
 
-            // Consignee
             'consignee.consigneeName'       => 'required|string',
             'consignee.consigneePhone'      => 'nullable|string',
             'consignee.consigneeGst'        => 'nullable|string',
@@ -315,33 +323,23 @@ class ShipmentController extends Controller
             'consignee.consigneeAddCity'    => 'nullable|string',
             'consignee.consigneePincode'    => 'nullable|string',
 
-            // COD/DOD
-            'inFavour'            => 'nullable|string',
-            'payableAt'              => 'nullable|string',
-            'collectableAmount'      => 'nullable|numeric',
-
-            // Parcels
-            'parcels'               => 'required_if:service.service,Parcel|nullable|array',
+            'parcels'               => 'nullable|array',
             'parcels.*.length'      => 'required_if:service.service,Parcel|numeric',
             'parcels.*.width'       => 'required_if:service.service,Parcel|numeric',
             'parcels.*.height'      => 'required_if:service.service,Parcel|numeric',
             'parcels.*.weight'      => 'required_if:service.service,Parcel|numeric',
             'parcels.*.numBoxes'    => 'required_if:service.service,Parcel|integer|min:1',
-            'parcels.*.volWeight'   => 'required_if:service.service,Parcel|numeric',
 
-            // Invoices - only required for Parcel service
-            'invoices'                      => 'required_if:service.service,Parcel|nullable|array',
+            'invoices'                      => 'nullable|array',
             'invoices.*.invoiceNumber'      => 'required_if:service.service,Parcel|string',
             'invoices.*.invoiceAmount'      => 'required_if:service.service,Parcel|numeric',
             'invoices.*.ewayBill'           => 'nullable|string',
 
-            // Doc dimensions - only required for Document service
             'docDimensions.length'  => 'required_if:service.service,Document|numeric',
             'docDimensions.width'   => 'required_if:service.service,Document|numeric',
             'docDimensions.height'  => 'required_if:service.service,Document|numeric',
             'docDimensions.weight'  => 'required_if:service.service,Document|numeric',
 
-            // Rates
             'rates'                         => 'nullable|array',
             'rates.cft'                     => 'nullable|integer',
             'rates.chargeableWeight'        => 'nullable|numeric',
@@ -367,17 +365,119 @@ class ShipmentController extends Controller
         try {
             DB::beginTransaction();
 
-            $shipment->update([/* same mapping as store */]);
+            $s   = $data['service'];
+            $sh  = $data['shipper'];
+            $con = $data['consignee'];
+            $cust = $data['customer'];
+            $dod = $request->input('dodCodDetails', []);
 
-            // Delete and recreate parcels and invoices
+            $wasBooked = $shipment->status === 'booked';
+            $nowBooked = $data['status'] === 'booked';
+
+            $shipment->update([
+                'branch_id'             => auth()->user()->hasAnyRole(['super-admin', 'admin'])
+                                            ? $data['branchId']
+                                            : $shipment->branch_id, // don't allow branch change for non-admins
+                'customer_id'           => $cust['customerId'] ?? null,
+                'status'                => $data['status'],
+                'service_type'          => $s['serviceType'] ?? null,
+                'service'               => $s['service'],
+                'payment_mode'          => $s['paymentMode'] ?? null,
+                'customer_reference'    => $s['customerRef'] ?? null,
+                'parcel_content'        => $s['parcelContent'] ?? null,
+
+                'shipper_name'          => $sh['shipperName'],
+                'shipper_company_name'  => $sh['shipperCompany'] ?? null,
+                'shipper_phone'         => $sh['shipperPhone'] ?? null,
+                'shipper_email'         => $sh['shipperEmail'] ?? null,
+                'shipper_gst'           => $sh['shipperGst'] ?? null,
+                'shipper_address_line1' => $sh['shipperAddLine1'] ?? null,
+                'shipper_address_line2' => $sh['shipperAddLine2'] ?? null,
+                'shipper_city'          => $sh['shipperAddCity'] ?? null,
+                'shipper_state_id'      => $sh['shipperState'] ?? null,
+                'shipper_pincode'       => $sh['shipperPincode'] ?? null,
+
+                'consignee_name'        => $con['consigneeName'],
+                'consignee_phone'       => $con['consigneePhone'] ?? null,
+                'consignee_gst'         => $con['consigneeGst'] ?? null,
+                'consignee_address_line1' => $con['consigneeAddLine1'] ?? null,
+                'consignee_address_line2' => $con['consigneeAddLine2'] ?? null,
+                'consignee_city'        => $con['consigneeAddCity'] ?? null,
+                'consignee_pincode'     => $con['consigneePincode'] ?? null,
+
+                'special_instructions'  => $data['specialInstruction'] ?? null,
+                'in_favor_of'           => $dod['inFavour'] ?? null,
+                'payable_at'            => $dod['payableAt'] ?? null,
+                'collectable_amount'    => $dod['collectableAmount'] ?? null,
+                'booked_at'             => !$wasBooked && $nowBooked ? now() : $shipment->booked_at,
+            ]);
+
+            // Parcels — delete and recreate
             $shipment->parcels()->delete();
+            if ($s['service'] === 'Parcel' && !empty($data['parcels'])) {
+                $shipment->parcels()->createMany(
+                    collect($data['parcels'])->map(fn($p) => [
+                        'length'    => $p['length'],
+                        'width'     => $p['width'],
+                        'height'    => $p['height'],
+                        'weight'    => $p['weight'],
+                        'num_boxes' => $p['numBoxes'],
+                    ])->toArray()
+                );
+            } elseif ($s['service'] === 'Document' && !empty($data['docDimensions'])) {
+                $doc = $data['docDimensions'];
+                $shipment->parcels()->create([
+                    'length'             => $doc['length'],
+                    'width'              => $doc['width'],
+                    'height'             => $doc['height'],
+                    'weight'             => $doc['weight'],
+                    'num_boxes'          => 1,
+                    'volumetric_weight'  => round(($doc['length'] * $doc['width'] * $doc['height']) / 27000, 2),
+                ]);
+            }
+
+            // Invoices — delete and recreate
             $shipment->invoices()->delete();
-            $shipment->charges()->delete();
+            if (!empty($data['invoices'])) {
+                $shipment->invoices()->createMany(
+                    collect($data['invoices'])->map(fn($i) => [
+                        'invoice_number' => $i['invoiceNumber'],
+                        'invoice_amount' => $i['invoiceAmount'],
+                        'eway_bill'      => $i['ewayBill'] ?? null,
+                    ])->toArray()
+                );
+            }
 
-            // Then recreate exactly as in store()
-            // ... parcels, invoices, charges blocks
+            // Charges — update or create
+            if (!empty($data['rates'])) {
+                $shipment->charges()->updateOrCreate(
+                    ['shipment_id' => $shipment->id],
+                    [
+                        'cft'               => $data['rates']['cft'] ?? null,
+                        'chargeable_weight' => $data['rates']['chargeableWeight'] ?? null,
+                        'package_yield'     => $data['rates']['packageYield'] ?? null,
+                        'freight'           => $data['rates']['freight'] ?? 0,
+                        'fuel'              => $data['rates']['fuel'] ?? 0,
+                        'awb_fee'           => $data['rates']['awbFee'] ?? 0,
+                        'fov'               => $data['rates']['fov'] ?? 0,
+                        'insurance_type'    => $data['rates']['insurance'] ?? 'owner',
+                        'carrier_insurance' => $data['rates']['carrierInsurance'] ?? 0,
+                        'fod'               => $data['rates']['fod'] ?? 0,
+                        'dod'               => $data['rates']['dod'] ?? 0,
+                        'oda'               => $data['rates']['oda'] ?? 0,
+                        'handling'          => $data['rates']['handling'] ?? 0,
+                        'dcc'               => $data['rates']['dcc'] ?? 0,
+                        'pickup_charges'    => $data['rates']['pickupcharges'] ?? 0,
+                        'delivery_charges'  => $data['rates']['deliverycharges'] ?? 0,
+                        'total'             => $data['rates']['total'] ?? 0,
+                        'gst'               => $data['rates']['gst'] ?? 0,
+                        'grand_total'       => $data['rates']['grandTotal'] ?? 0,
+                    ]
+                );
+            }
 
-            if ($data['status'] === 'booked' && $shipment->getOriginal('status') === 'draft') {
+            // Log event only if status changed to booked
+            if (!$wasBooked && $nowBooked) {
                 ShipmentEvent::create([
                     'shipment_id' => $shipment->id,
                     'event_type'  => 'booked',
@@ -386,14 +486,13 @@ class ShipmentController extends Controller
                     'notes'       => 'Shipment booked',
                     'created_by'  => auth()->id(),
                 ]);
-
-                $shipment->update(['booked_at' => now()]);
             }
 
             DB::commit();
+
             return response()->json([
                 'message' => 'Shipment updated successfully!',
-                'data'    => $shipment->load(['parcels', 'invoices', 'charges', 'events']),
+                'data'    => $shipment->fresh()->load(['parcels', 'invoices', 'charges', 'events']),
             ]);
 
         } catch (\Exception $e) {

@@ -9,12 +9,12 @@ class Shipment extends Model
     protected $fillable = [
         'awb_number', 'branch_id', 'customer_id', 'customer_type',
         'status', 'service_type', 'service', 'payment_mode',
-        'shipper_name', 'shipper_company', 'shipper_phone', 'shipper_email',
+        'shipper_name', 'shipper_company_name', 'shipper_phone', 'shipper_email',
         'shipper_gst', 'shipper_address_line1', 'shipper_address_line2',
         'shipper_city', 'shipper_state', 'shipper_pincode',
-        'consignee_name', 'consignee_phone', 'consignee_gst',
-        'consignee_address', 'consignee_pincode', 'consignee_city', 'consignee_state',
-        'customer_ref', 'parcel_content', 'tracking_number', 'special_instructions',
+        'consignee_name', 'receiver_name', 'consignee_phone', 'consignee_gst',
+        'consignee_address_line1', 'consignee_address_line2', 'consignee_pincode', 'consignee_city', 'consignee_state',
+        'customer_reference', 'parcel_content', 'tracking_number', 'special_instructions',
         'in_favour_of', 'payable_at', 'collectable_amount',
         'created_by', 'booked_at',
     ];
@@ -36,22 +36,23 @@ class Shipment extends Model
 
     private static function generateAwb(int $branchId): string
     {
-        $now = now();
-        $year = $now->format('y');   // 2-digit year: "25"
-        $month = $now->format('m');  // 2-digit month: "02"
+        $now    = now();
+        $year   = $now->format('y');
+        $month  = $now->format('m');
 
-        $branchCode = \App\Models\Branch::where('id', $branchId)
-            ->value('code'); // single column fetch, no full model load
+        $branchCode = \App\Models\Branch::where('id', $branchId)->value('code');
 
+        $prefix = $branchCode . $year . $month; // e.g. "BPD2503"
+
+        // Only count auto-generated AWBs (those that start with our prefix)
         $count = self::where('branch_id', $branchId)
-            ->whereYear('created_at', $now->year)
-            ->whereMonth('created_at', $now->month)
+            ->where('awb_number', 'like', $prefix . '%')
             ->lockForUpdate()
             ->count();
 
         $sequence = str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
-        return $branchCode . $year . $month . $sequence;
+        return $prefix . $sequence;
     }
 
     public function branch()

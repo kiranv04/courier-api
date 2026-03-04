@@ -11,7 +11,8 @@ class ShipmentCharge extends Model
         'freight', 'fuel', 'awb_fee', 'fov',
         'insurance_type', 'carrier_insurance',
         'fod', 'dod', 'oda', 'handling', 'dcc',
-        'pickup_charges', 'delivery_charges',
+        'pickup_charges', 'delivery_charges', 
+        'other_charges', 'premium_charges',
         'total', 'gst', 'grand_total',
     ];
 
@@ -30,6 +31,8 @@ class ShipmentCharge extends Model
         'dcc'               => 'decimal:2',
         'pickup_charges'    => 'decimal:2',
         'delivery_charges'  => 'decimal:2',
+        'other_charges'     => 'decimal:2',
+        'premium_charges'   => 'decimal:2',
         'total'             => 'decimal:2',
         'gst'               => 'decimal:2',
         'grand_total'       => 'decimal:2',

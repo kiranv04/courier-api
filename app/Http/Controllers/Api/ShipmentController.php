@@ -550,4 +550,35 @@ class ShipmentController extends Controller
             'events'     => $shipment->events()->with(['branch', 'createdBy'])->get(),
         ]);
     }
+
+    public function track(string $awb)
+    {
+        $shipment = Shipment::with(['events', 'branch'])
+            ->where('awb_number', $awb)
+            ->first();
+
+        if (!$shipment) {
+            return response()->json(['message' => 'Shipment not found'], 404);
+        }
+
+        return response()->json([
+            'data' => [
+                'awb_number'        => $shipment->awb_number,
+                'status'            => $shipment->status,
+                'service'           => $shipment->service,
+                'service_type'      => $shipment->service_type,
+                'booked_at'         => $shipment->booked_at,
+                'origin_branch'     => $shipment->branch?->name,
+                'shipper_city'      => $shipment->shipper_city,
+                'consignee_name'    => $shipment->consignee_name,
+                'consignee_city'    => $shipment->consignee_city,
+                'consignee_pincode' => $shipment->consignee_pincode,
+                'events'            => $shipment->events->map(fn($e) => [
+                    'status'     => $e->event_type,
+                    'notes'      => $e->notes,
+                    'timestamp'  => $e->created_at,
+                ]),
+            ]
+        ]);
+    }
 }

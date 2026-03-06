@@ -4,10 +4,12 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CftController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\ManifestController;
 use App\Http\Controllers\Api\PincodeController;
 use App\Http\Controllers\Api\PrintConfigController;
 use App\Http\Controllers\Api\ShipmentController;
 use App\Http\Controllers\Api\ShipmentPdfController;
+use App\Http\Controllers\Api\ShipmentStatusController;
 use App\Http\Controllers\Api\StateController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseController;
@@ -25,10 +27,6 @@ Route::middleware('auth:sanctum')->group(function () {
    // ────────────────────────────────────────────────
    Route::middleware('role:super-admin|admin')->group(function () {
 
-      Route::apiResource('users', UserController::class);
-      Route::post('/users/{id}/activate', [UserController::class, 'activate']);
-      Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
-      
       Route::apiResource('branches', BranchController::class);
       Route::post('/branches/{id}/activate', [BranchController::class, 'activate']);
       
@@ -45,6 +43,9 @@ Route::middleware('auth:sanctum')->group(function () {
    // ────────────────────────────────────────────────
    Route::middleware('role:super-admin|admin|branch-admin|branch-employee')->group(function () {
 
+      Route::apiResource('users', UserController::class);
+      Route::post('/users/{id}/activate', [UserController::class, 'activate']);
+      Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
       Route::get('/users/branch/{branchId}', [UserController::class, 'branchUsers']);
 
       Route::get('/cfts', [CftController::class, 'index']);
@@ -56,6 +57,11 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::get('/customers/{customer}/print-config', [PrintConfigController::class, 'getForCustomer']);
       Route::post('/customers/{customer}/print-config', [PrintConfigController::class, 'saveForCustomer']);
       Route::delete('/customers/{customer}/print-config', [PrintConfigController::class, 'resetForCustomer']);
+
+      Route::get('/shipments/destinations', [ShipmentStatusController::class, 'destinations']);
+      Route::get('/shipments/delivery-agents', [ShipmentStatusController::class, 'deliveryAgents']);
+      Route::get('/shipments/{shipment}/transitions', [ShipmentStatusController::class, 'nextTransitions']);
+      Route::patch('/shipments/{shipment}/statusUpdate', [ShipmentStatusController::class, 'update']);
 
       Route::apiResource('shipments', ShipmentController::class)->only(['index', 'store', 'show', 'update']);
       Route::patch('/shipments/{shipment}/status', [ShipmentController::class, 'updateStatus']);
@@ -82,15 +88,14 @@ Route::middleware('auth:sanctum')->group(function () {
    Route::post('/locations/{id}/activate', [LocationController::class, 'actrivate']);
    
    Route::get('/states', [StateController::class, 'index']);
+
+   Route::get('/manifests/eligible-shipments', [ManifestController::class, 'eligibleShipments']);
+   Route::post('/manifests/{manifest}/close', [ManifestController::class, 'close']);
+   Route::apiResource('manifests', ManifestController::class)->only(['index', 'show', 'store']);
 });
 
 // Public tracking endpoint - no authentication required
-Route::get('/track/{awb}', function (string $awb) {
-    $shipment = Shipment::where('awb_number', $awb)
-        ->with(['events.entity'])
-        ->firstOrFail();
-    return (new ShipmentController)->tracking($shipment);
-});
+Route::get('/track/{awb}', [ShipmentController::class, 'track']);
 
 Route::get('/pincodes/check', [PincodeController::class, 'check']);
 

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CftController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\ManifestController;
 use App\Http\Controllers\Api\PincodeController;
@@ -92,6 +93,10 @@ Route::middleware('auth:sanctum')->group(function () {
    Route::get('/manifests/eligible-shipments', [ManifestController::class, 'eligibleShipments']);
    Route::post('/manifests/{manifest}/close', [ManifestController::class, 'close']);
    Route::apiResource('manifests', ManifestController::class)->only(['index', 'show', 'store']);
+
+   Route::get('/dashboard/branch',     [DashboardController::class, 'branch']);
+   Route::get('/dashboard/warehouse',  [DashboardController::class, 'warehouse']);
+   Route::get('/dashboard/superadmin', [DashboardController::class, 'superadmin']);
 });
 
 // Public tracking endpoint - no authentication required

@@ -19,7 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://127.0.0.1:5173', 'https://testui.swiftsafex.com'],
+    'allowed_origins' => ['http://127.0.0.1:5173', 'https://testui.swiftsafex.com', 'https://swiftsafex.com', 'http://localhost:8001', 'https://draftweb.swiftsafex.com'],
 
     'allowed_origins_patterns' => [],
 

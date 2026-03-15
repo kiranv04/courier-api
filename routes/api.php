@@ -42,7 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
    // ────────────────────────────────────────────────
    // Branch scoped operations (list / create / etc.)
    // ────────────────────────────────────────────────
-   Route::middleware('role:super-admin|admin|branch-admin|branch-employee')->group(function () {
+   Route::middleware('role:super-admin|admin|branch-admin|branch-employee|warehouse-admin|warehouse-employee')->group(function () {
 
       Route::apiResource('users', UserController::class);
       Route::post('/users/{id}/activate', [UserController::class, 'activate']);
@@ -76,7 +76,6 @@ Route::middleware('auth:sanctum')->group(function () {
    // Warehouse scoped (very limited)
    // ────────────────────────────────────────────────
    Route::middleware('role:warehouse-admin')->group(function () {
-
       Route::get('/users/warehouse/{warehouseId}', [UserController::class, 'warehouseUsers']);
    });
 

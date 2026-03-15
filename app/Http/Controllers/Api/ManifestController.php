@@ -18,7 +18,7 @@ class ManifestController extends Controller
     private array $typeConfig = [
         'pickup'   => ['from' => ['booked'],              'to' => 'picked_up'],
         'dispatch' => ['from' => ['picked_up'],            'to' => 'in_transit'],
-        'inbound'  => ['from' => ['in_transit'],           'to' => 'at_hub'],
+        'inbound' => ['from' => ['in_transit'],             'to' => null],
         'outbound' => ['from' => ['at_hub'],               'to' => 'in_transit'],
         'delivery' => ['from' => ['at_branch'],            'to' => 'out_for_delivery'],
     ];
@@ -85,7 +85,9 @@ class ManifestController extends Controller
         $user      = auth()->user();
         $config    = $this->typeConfig[$data['type']];
         $fromStatuses = $config['from'];
-        $toStatus  = $config['to'];
+        $toStatus = $data['type'] === 'inbound'
+            ? ($user->hasAnyRole(['warehouse-admin', 'warehouse-employee']) ? 'at_hub' : 'at_branch')
+            : $config['to'];
 
         // Verify all selected shipments are in the correct status
         $shipments = Shipment::whereIn('id', $data['shipment_ids'])
@@ -121,12 +123,12 @@ class ManifestController extends Controller
             $manifest->shipments()->attach($data['shipment_ids']);
 
             // Bulk update shipment statuses
-            // $updateData = ['status' => $toStatus];
-            // if ($toStatus === 'delivered') {
-            //     $updateData['delivered_at'] = now();
-            // }
+            $updateData = ['status' => $toStatus];
+            if ($toStatus === 'delivered') {
+                $updateData['delivered_at'] = now();
+            }
 
-            // Shipment::whereIn('id', $data['shipment_ids'])->update($updateData);
+            Shipment::whereIn('id', $data['shipment_ids'])->update($updateData);
 
             // Bulk create shipment events
             $events = $shipments->map(fn($s) => [
@@ -199,18 +201,71 @@ class ManifestController extends Controller
         ]);
 
         $user         = auth()->user();
-        $config       = $this->typeConfig[$request->query('type')];
+        $type         = $request->query('type');
+        $config       = $this->typeConfig[$type];
         $fromStatuses = $config['from'];
 
+        $isWarehouse = $user->hasAnyRole(['warehouse-admin', 'warehouse-employee']);
+        $isAdmin     = $user->hasAnyRole(['super-admin', 'admin']);
+
         $query = Shipment::whereIn('status', $fromStatuses)
-            ->select('id', 'awb_number', 'status', 'consignee_name', 
-                     'consignee_city', 'service', 'service_type', 'branch_id')
+            ->select(
+                'id', 'awb_number', 'status', 'consignee_name',
+                'consignee_city', 'service', 'service_type', 'branch_id'
+            )
             ->with('parcels:id,shipment_id,weight,num_boxes')
             ->orderBy('created_at', 'desc');
 
-        // Scope to branch/warehouse for non-admins
-        if (!$user->hasAnyRole(['super-admin', 'admin'])) {
-            $query->where('branch_id', $user->owner_id);
+        if (!$isAdmin) {
+            if ($type === 'inbound') {
+                // Shipments headed TO this location
+                $entityType = $isWarehouse
+                    ? 'App\\Models\\Warehouse'
+                    : 'App\\Models\\Branch';
+
+                $latestEventIds = ShipmentEvent::select(DB::raw('MAX(id) as id'))
+                    ->groupBy('shipment_id')
+                    ->pluck('id');
+
+                $eligibleIds = ShipmentEvent::whereIn('id', $latestEventIds)
+                    ->where('destination_type', $entityType)
+                    ->where('destination_id', $user->owner_id)
+                    ->pluck('shipment_id');
+
+                $query->whereIn('id', $eligibleIds);
+
+            } elseif ($type === 'delivery') {
+                // Shipments currently AT this branch (latest event is at_branch here)
+                $latestEventIds = ShipmentEvent::select(DB::raw('MAX(id) as id'))
+                    ->groupBy('shipment_id')
+                    ->pluck('id');
+
+                $eligibleIds = ShipmentEvent::whereIn('id', $latestEventIds)
+                    ->where('entity_type', 'App\\Models\\Branch')
+                    ->where('entity_id', $user->owner_id)
+                    ->where('event_type', 'at_branch')
+                    ->pluck('shipment_id');
+
+                $query->whereIn('id', $eligibleIds);
+
+            } elseif ($type === 'outbound') {
+                // Shipments currently AT this warehouse
+                $latestEventIds = ShipmentEvent::select(DB::raw('MAX(id) as id'))
+                    ->groupBy('shipment_id')
+                    ->pluck('id');
+
+                $eligibleIds = ShipmentEvent::whereIn('id', $latestEventIds)
+                    ->where('entity_type', 'App\\Models\\Warehouse')
+                    ->where('entity_id', $user->owner_id)
+                    ->where('event_type', 'at_hub')
+                    ->pluck('shipment_id');
+
+                $query->whereIn('id', $eligibleIds);
+
+            } else {
+                // Pickup and dispatch — scoped to origin branch
+                $query->where('branch_id', $user->owner_id);
+            }
         }
 
         return response()->json(['data' => $query->get()]);

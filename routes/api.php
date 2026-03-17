@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CftController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\ManifestController;
 use App\Http\Controllers\Api\PincodeController;
@@ -69,6 +70,8 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::post('/shipments/{shipment}/print-override', [PrintConfigController::class, 'saveOverride']); // Shipment print override
       Route::get('/shipments/{shipment}/print-config', [PrintConfigController::class, 'getEffectiveForShipment']); // Effective config for a shipment (used by print modal)
       Route::get('/shipments/{shipment}/pdf', [ShipmentPdfController::class, 'generate']); // PDF generation
+
+      Route::get('/delivery/cod-summary', [DeliveryController::class, 'codSummary']);
    });
 
 
@@ -77,6 +80,12 @@ Route::middleware('auth:sanctum')->group(function () {
    // ────────────────────────────────────────────────
    Route::middleware('role:warehouse-admin')->group(function () {
       Route::get('/users/warehouse/{warehouseId}', [UserController::class, 'warehouseUsers']);
+   });
+
+   Route::middleware('role:branch-delivery')->group(function () {
+      Route::get('/delivery/shipments', [DeliveryController::class, 'shipments']);
+      Route::post('/delivery/shipments/{shipment}/deliver', [DeliveryController::class, 'deliver']);
+      Route::post('/delivery/shipments/{shipment}/fail', [DeliveryController::class, 'fail']);
    });
 
    //Other shared routes

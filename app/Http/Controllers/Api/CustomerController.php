@@ -24,6 +24,27 @@ class CustomerController extends Controller
 
         $customers = $query->with('addresses')->get();
 
+        $customers->transform(function ($customer) {
+            $customer->gst_image_path = $customer->gst_image_path
+                ? Storage::disk('public')->url($customer->gst_image_path)
+                : null;
+            return $customer;
+        });
+
+        $customers->transform(function ($customer) {
+            $customer->pan_image_path = $customer->pan_image_path
+                ? Storage::disk('public')->url($customer->pan_image_path)
+                : null;
+            return $customer;
+        });
+
+        $customers->transform(function ($customer) {
+            $customer->aadhar_image_path = $customer->aadhar_image_path
+                ? Storage::disk('public')->url($customer->aadhar_image_path)
+                : null;
+            return $customer;
+        });
+
         return response()->json([
             'data' => $customers
         ]);

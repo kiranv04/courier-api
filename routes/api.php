@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\CftController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DeliveryController;
+use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\ManifestController;
 use App\Http\Controllers\Api\PincodeController;
@@ -16,7 +17,6 @@ use App\Http\Controllers\Api\StateController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\AuthController;
-use App\Models\Shipment;
 use Illuminate\Support\Facades\Route;
 
 
@@ -65,13 +65,17 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::get('/shipments/{shipment}/transitions', [ShipmentStatusController::class, 'nextTransitions']);
       Route::patch('/shipments/{shipment}/statusUpdate', [ShipmentStatusController::class, 'update']);
 
-      Route::apiResource('shipments', ShipmentController::class)->only(['index', 'store', 'show', 'update']);
+      Route::apiResource('shipments', ShipmentController::class)->only(['index', 'store', 'update']);
+      Route::get('/shipments/{shipment}', [ShipmentController::class, 'show']);
       Route::patch('/shipments/{shipment}/status', [ShipmentController::class, 'updateStatus']);
       Route::post('/shipments/{shipment}/print-override', [PrintConfigController::class, 'saveOverride']); // Shipment print override
       Route::get('/shipments/{shipment}/print-config', [PrintConfigController::class, 'getEffectiveForShipment']); // Effective config for a shipment (used by print modal)
       Route::get('/shipments/{shipment}/pdf', [ShipmentPdfController::class, 'generate']); // PDF generation
 
       Route::get('/delivery/cod-summary', [DeliveryController::class, 'codSummary']);
+
+      Route::get('/invoices', [InvoiceController::class, 'index']);
+      Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'show']);
    });
 
 

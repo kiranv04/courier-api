@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
 use App\Http\Controllers\Controller;
+use App\Models\Invoice;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -78,6 +79,7 @@ class ShipmentController extends Controller
             'consignee.consigneeAddLine2'   => 'nullable|string',
             'consignee.consigneeAddCity'    => 'nullable|string',
             'consignee.consigneePincode'    => 'nullable|string',
+            'consignee.consigneeState'      => 'nullable|string',
 
             // COD/DOD
             'inFavour'            => 'nullable|string',
@@ -91,7 +93,7 @@ class ShipmentController extends Controller
             'parcels.*.height'      => 'required_if:service.service,Parcel|numeric',
             'parcels.*.weight'      => 'required_if:service.service,Parcel|numeric',
             'parcels.*.numBoxes'    => 'required_if:service.service,Parcel|integer|min:1',
-            // 'parcels.*.volWeight'   => 'required_if:service.service,Parcel|numeric',
+            'parcels.*.volWeight'   => 'required_if:service.service,Parcel|numeric',
 
             // Invoices - only required for Parcel service
             'invoices'                      => 'required_if:service.service,Parcel|nullable|array',
@@ -104,6 +106,7 @@ class ShipmentController extends Controller
             'docDimensions.width'   => 'required_if:service.service,Document|numeric',
             'docDimensions.height'  => 'required_if:service.service,Document|numeric',
             'docDimensions.weight'  => 'required_if:service.service,Document|numeric',
+            'docDimensions.volWeight'  => 'nullable|numeric',
 
             // Rates
             'rates'                         => 'nullable|array',
@@ -174,6 +177,7 @@ class ShipmentController extends Controller
                 'consignee_address_line2'         => $con['consigneeAddLine2'] ?? null,
                 'consignee_city'        => $con['consigneeAddCity'] ?? null,
                 'consignee_pincode'     => $con['consigneePincode'] ?? null,
+                'consignee_state_id'    => $con['consigneeState'] ?? null,
 
                 'special_instructions'  => $data['specialInstruction'] ?? null,
                 'in_favor_of'          => $dod['inFavour'] ?? null,
@@ -192,7 +196,7 @@ class ShipmentController extends Controller
                         'height'     => $p['height'],
                         'weight'     => $p['weight'],
                         'num_boxes'  => $p['numBoxes'],
-                        // 'volumetric_weight' => $p['volWeight'],
+                        'volumetric_weight' => $p['volWeight'],
                     ])->toArray()
                 );
             } elseif ($s['service'] === 'Document' && !empty($data['docDimensions'])) {
@@ -203,9 +207,9 @@ class ShipmentController extends Controller
                     'height'     => $doc['height'],
                     'weight'     => $doc['weight'],
                     'num_boxes'  => 1,
-                    // 'volumetric_weight' => round(($doc['length'] * $doc['width'] * $doc['height']) / 27000, 2),
+                    'volumetric_weight' => $doc['volWeight'] ?? null,
                 ]);
-            }
+            }   
 
             // Invoices
             if (!empty($data['invoices'])) {
@@ -219,9 +223,10 @@ class ShipmentController extends Controller
             }
 
             // Charges
+            $chargeRecord = null;
             if (!empty($data['rates'])) {
-                $r = $data['rates'];
-                $shipment->charges()->create([
+                // $r = $data['rates'];
+                $chargeRecord =  $shipment->charges()->create([
                     'cft'               => $data['rates']['cft'] ?? null,
                     'chargeable_weight' => $data['rates']['chargeableWeight'] ?? null,
                     'package_yield'     => $data['rates']['packageYield'] ?? null,
@@ -255,6 +260,30 @@ class ShipmentController extends Controller
                 'notes'       => 'Shipment ' . $data['status'],
                 'created_by'  => auth()->id(),
             ]);
+
+            // ── Cash invoice — only for booked shipments with charges ──────────
+            // Corporate shipments are invoiced monthly via VkInvoiceController.
+            // Cash shipments get an invoice immediately on booking.
+            if ($data['status'] === 'booked'
+                && $cust['customerType'] === 'cash'
+                && $chargeRecord
+            ) {
+                $shipment->load('branch.location.state');
+                $isIntraState = $this->resolveIntraState($shipment);
+    
+                $invoice = new Invoice([
+                    'invoice_number' => Invoice::generateInvoiceNumber(),
+                    'type'           => 'cash',
+                    'branch_id'      => $shipment->branch_id,
+                    'customer_id'    => $shipment->customer_id,
+                    'status'         => 'finalized',
+                    'created_by'     => auth()->id(),
+                ]);
+    
+                $invoice->computeTotalsFromCharges(collect([$chargeRecord]), $isIntraState);
+                $invoice->save();
+                $invoice->shipments()->attach($shipment->id);
+            }
 
             DB::commit();
 
@@ -448,9 +477,10 @@ class ShipmentController extends Controller
                 );
             }
 
-            // Charges — update or create
+            // Charges — update or create, keep a reference for invoice recompute
+            $chargeRecord = null;
             if (!empty($data['rates'])) {
-                $shipment->charges()->updateOrCreate(
+                $chargeRecord = $shipment->charges()->updateOrCreate(
                     ['shipment_id' => $shipment->id],
                     [
                         'cft'               => $data['rates']['cft'] ?? null,
@@ -486,6 +516,42 @@ class ShipmentController extends Controller
                     'notes'       => 'Shipment booked',
                     'created_by'  => auth()->id(),
                 ]);
+            }
+
+            // ── Cash invoice handling ──────────────────────────────────────────
+            // Only applies to cash customers. Corporate invoices are monthly batches.
+            if ($cust['customerType'] === 'cash' && $chargeRecord) {
+    
+                $shipment->load('branch.location.state');
+                $isIntraState = $this->resolveIntraState($shipment);
+    
+                // Find any existing VK invoice for this shipment
+                $existingInvoice = Invoice::whereHas(
+                    'shipments',
+                    fn($q) => $q->where('shipments.id', $shipment->id)
+                )->first();
+    
+                if (!$wasBooked && $nowBooked) {
+                    // draft → booked: create a fresh invoice
+                    $vkInvoice = new Invoice([
+                        'invoice_number' => Invoice::generateInvoiceNumber(),
+                        'type'           => 'cash',
+                        'branch_id'      => $shipment->branch_id,
+                        'customer_id'    => $shipment->customer_id,
+                        'status'         => 'finalized',
+                        'created_by'     => auth()->id(),
+                    ]);
+    
+                    $vkInvoice->computeTotalsFromCharges(collect([$chargeRecord]), $isIntraState);
+                    $vkInvoice->save();
+                    $vkInvoice->shipments()->attach($shipment->id);
+    
+                } elseif ($wasBooked && $nowBooked && $existingInvoice) {
+                    // booked → booked (charges edited): recompute totals on the existing invoice.
+                    // The invoice number and date are preserved — only the amounts change.
+                    $existingInvoice->computeTotalsFromCharges(collect([$chargeRecord]), $isIntraState);
+                    $existingInvoice->save();
+                }
             }
 
             DB::commit();
@@ -580,5 +646,17 @@ class ShipmentController extends Controller
                 ]),
             ]
         ]);
+    }
+
+    private function resolveIntraState(Shipment $shipment): bool
+    {
+        $branchStateName    = $shipment->branch?->location?->state?->name;
+        $consigneeStateName = $shipment->consignee_state;
+    
+        if (!$branchStateName || !$consigneeStateName) {
+            return false;
+        }
+    
+        return strtolower(trim($branchStateName)) === strtolower(trim($consigneeStateName));
     }
 }

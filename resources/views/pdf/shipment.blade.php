@@ -3,566 +3,406 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Shipment {{ $shipment->awb_number }}</title>
+  <title>Tax Invoice – {{ $shipment->awb_number }}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       font-family: DejaVu Sans, sans-serif;
-      font-size: 12px;
+      font-size: 11px;
       color: #111;
       background: #fff;
     }
 
     .page {
-      padding: 28px 32px;
+      padding: 20px 24px;
     }
 
-    /* ── Header ── */
-    .header {
-      border-bottom: 2px solid #111;
-      padding-bottom: 12px;
-      margin-bottom: 16px;
+    /* ── Outer border ── */
+    .invoice-box {
+      border: 1.5px solid #333;
+      width: 100%;
     }
-    .header-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
+
+    /* ── Header: company | Tax Invoice | AWB ── */
+    .header-row {
+      display: table;
+      width: 100%;
+      border-bottom: 1.5px solid #333;
     }
+    .header-company {
+      display: table-cell;
+      width: 38%;
+      padding: 10px 14px;
+      vertical-align: middle;
+    }
+    .header-title {
+      display: table-cell;
+      width: 24%;
+      text-align: center;
+      vertical-align: middle;
+      padding: 10px 4px;
+      border-left: 1px solid #ccc;
+      border-right: 1px solid #ccc;
+    }
+    .header-awb {
+      display: table-cell;
+      width: 38%;
+      vertical-align: middle;
+      padding: 10px 14px;
+    }
+
     .company-name {
-      font-size: 22px;
+      font-size: 18px;
       font-weight: bold;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
     }
-    .company-tagline {
-      font-size: 10px;
+    .company-sub {
+      font-size: 9px;
       color: #555;
       margin-top: 2px;
     }
-    {{-- Branch details block — uncomment when client confirms --}}
-    {{-- .branch-info { text-align: right; font-size: 10px; color: #444; line-height: 1.6; } --}}
-
-    .awb-block {
-      text-align: right;
+    .tax-invoice-heading {
+      font-size: 15px;
+      font-weight: bold;
     }
     .awb-label {
-      font-size: 10px;
+      font-size: 9px;
       color: #555;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.3px;
     }
-    .awb-number {
-      font-size: 20px;
+    .awb-value {
+      font-size: 13px;
       font-weight: bold;
-      letter-spacing: 1.5px;
       font-family: 'Courier New', monospace;
+      letter-spacing: 1px;
+      margin-top: 2px;
     }
-    .status-badge {
-      display: inline-block;
-      margin-top: 4px;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 10px;
-      font-weight: bold;
-      text-transform: uppercase;
-      background: #e5e7eb;
-      color: #374151;
+    .original-note {
+      font-size: 8px;
+      color: #555;
+      margin-top: 3px;
+      font-style: italic;
     }
 
-    /* ── Section ── */
-    .section {
-      margin-bottom: 14px;
-    }
-    .section-title {
-      font-size: 10px;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: #fff;
-      background: #0f766e;
-      padding: 4px 10px;
-      margin-bottom: 8px;
-    }
-    .section-body {
-      padding: 0 4px;
-    }
-
-    /* ── Two column layout ── */
-    .two-col {
+    /* ── Body: two panels ── */
+    .body-row {
       display: table;
       width: 100%;
-      border-collapse: collapse;
     }
-    .col {
+    .panel-left {
       display: table-cell;
       width: 50%;
       vertical-align: top;
-      padding-right: 16px;
+      border-right: 1.5px solid #333;
     }
-    .col:last-child { padding-right: 0; }
-
-    /* ── Label-value ── */
-    .lv { margin-bottom: 6px; }
-    .lv-label {
-      font-size: 9px;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-    }
-    .lv-value {
-      font-size: 11px;
-      color: #111;
-      margin-top: 1px;
-    }
-
-    /* ── Table ── */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 11px;
-    }
-    th {
-      background: #f3f4f6;
-      text-align: left;
-      padding: 5px 8px;
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-      color: #374151;
-      border: 1px solid #e5e7eb;
-    }
-    td {
-      padding: 5px 8px;
-      border: 1px solid #e5e7eb;
-      color: #111;
-    }
-    tr:nth-child(even) td { background: #f9fafb; }
-
-    /* ── Charges summary ── */
-    .charges-grid {
-      display: table;
-      width: 100%;
-    }
-    .charges-row {
-      display: table-row;
-    }
-    .charges-cell {
-      display: table-cell;
-      width: 25%;
-      padding: 4px 6px;
-    }
-
-    .totals-row {
-      display: table;
-      width: 100%;
-      margin-top: 10px;
-      border-top: 1px solid #e5e7eb;
-      padding-top: 10px;
-    }
-    .total-box {
-      display: table-cell;
-      width: 33.33%;
-      text-align: center;
-      padding: 6px;
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-    }
-    .total-box.grand {
-      background: #f0fdf4;
-      border-color: #bbf7d0;
-    }
-    .total-label {
-      font-size: 9px;
-      color: #6b7280;
-      text-transform: uppercase;
-    }
-    .total-value {
-      font-size: 14px;
-      font-weight: bold;
-      margin-top: 2px;
-    }
-    .total-box.grand .total-value { color: #15803d; }
-
-    /* ── Signature ── */
-    .signature-section {
-      margin-top: 32px;
-      border-top: 1px solid #e5e7eb;
-      padding-top: 16px;
-      display: table;
-      width: 100%;
-    }
-    .sig-cell {
+    .panel-right {
       display: table-cell;
       width: 50%;
-      padding-right: 32px;
+      vertical-align: top;
     }
-    .sig-cell:last-child { padding-right: 0; }
-    .sig-line {
-      border-bottom: 1px solid #111;
-      height: 36px;
-      margin-bottom: 4px;
+
+    /* ── Address blocks ── */
+    .addr-block {
+      padding: 10px 14px;
+      border-bottom: 1px solid #ccc;
     }
-    .sig-label {
+    .addr-block:last-child {
+      border-bottom: none;
+    }
+    .addr-section-label {
       font-size: 9px;
-      color: #6b7280;
+      font-weight: bold;
+      color: #444;
       text-transform: uppercase;
-      letter-spacing: 0.4px;
+      letter-spacing: 0.3px;
+      margin-bottom: 5px;
+    }
+    .addr-name {
+      font-size: 11px;
+      font-weight: bold;
+      margin-bottom: 3px;
+    }
+    .addr-line {
+      font-size: 10px;
+      color: #333;
+      line-height: 1.6;
+    }
+    .gst-line {
+      font-size: 10px;
+      margin-top: 5px;
+      color: #222;
+    }
+    .gst-line strong {
+      font-weight: bold;
+    }
+
+    /* ── Detail rows (right panel) ── */
+    .detail-row {
+      display: table;
+      width: 100%;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+    .detail-key {
+      display: table-cell;
+      width: 50%;
+      padding: 5px 12px;
+      font-size: 10px;
+      color: #444;
+      vertical-align: middle;
+      border-right: 1px solid #e8e8e8;
+    }
+    .detail-val {
+      display: table-cell;
+      width: 50%;
+      padding: 5px 12px;
+      font-size: 10px;
+      font-weight: bold;
+      color: #111;
+      vertical-align: middle;
+    }
+    .detail-row.grand-total .detail-key,
+    .detail-row.grand-total .detail-val {
+      font-size: 11px;
+      font-weight: bold;
+      background: #f0f0f0;
+      border-top: 1.5px solid #333;
+    }
+
+    /* ── Amount in words ── */
+    .amount-words {
+      border-top: 1px solid #ccc;
+      padding: 6px 12px;
+      font-size: 9.5px;
+      color: #111;
+      font-style: italic;
+    }
+
+    /* ── Stamp & Sign ── */
+    .stamp-box {
+      border-top: 1px solid #ccc;
+      padding: 8px 12px;
+      min-height: 72px;
+    }
+    .stamp-label {
+      font-size: 10px;
+      color: #444;
+    }
+    .strike-note {
+      font-size: 8px;
+      color: #666;
+      font-style: italic;
+      margin-top: 48px;
     }
 
     /* ── Footer ── */
-    .footer {
-      margin-top: 20px;
-      border-top: 1px solid #e5e7eb;
-      padding-top: 8px;
-      font-size: 9px;
-      color: #9ca3af;
+    .footer-box {
+      border-top: 1.5px solid #333;
+      padding: 7px 14px;
       text-align: center;
+      font-size: 8.5px;
+      color: #555;
+      line-height: 1.7;
     }
   </style>
 </head>
 <body>
 <div class="page">
+<div class="invoice-box">
 
   {{-- ── HEADER ── --}}
-  <div class="header">
-    <div class="header-top">
-      <div>
-        <div class="company-name">VK Enterprises</div>
-        <div class="company-tagline">Courier &amp; Logistics Services</div>
+  <div class="header-row">
 
-        {{-- Branch details — uncomment when client confirms --}}
-        {{--
-        <div style="margin-top: 6px; font-size: 10px; color: #444; line-height: 1.6;">
-          <strong>Branch:</strong> {{ $shipment->branch?->name }}<br/>
-          {{ $shipment->branch?->address }}<br/>
-          {{ $shipment->branch?->phone }}
-        </div>
-        --}}
-      </div>
-      <div class="awb-block">
-        <div class="awb-label">AWB Number</div>
-        <div class="awb-number">{{ $shipment->awb_number }}</div>
-        <div>
-          <span class="status-badge">{{ strtoupper(str_replace('_', ' ', $shipment->status)) }}</span>
-        </div>
-        @if($shipment->booked_at)
-          <div style="font-size: 9px; color: #6b7280; margin-top: 4px;">
-            Booked: {{ \Carbon\Carbon::parse($shipment->booked_at)->format('d M Y, h:i A') }}
+    <div class="header-company">
+      <div class="company-name">VK Enterprises</div>
+      <div class="company-sub">Courier &amp; Logistics Services</div>
+    </div>
+
+    <div class="header-title">
+      <div class="tax-invoice-heading">Tax Invoice</div>
+    </div>
+
+    <div class="header-awb">
+      <div class="awb-label">AWB No.</div>
+      <div class="awb-value">{{ $shipment->awb_number }}</div>
+      <div class="original-note">*Original copy for the recipient</div>
+    </div>
+
+  </div>{{-- end header-row --}}
+
+  {{-- ── BODY ── --}}
+  <div class="body-row">
+
+    {{-- LEFT: Billing (VK branch) + Customer (shipper) ── --}}
+    <div class="panel-left">
+
+      {{-- VK Billing Address --}}
+      <div class="addr-block">
+        <div class="addr-section-label">Billing Address</div>
+        <div class="addr-name">VK Enterprises</div>
+        @if($shipment->branch)
+          <div class="addr-line">
+            {{ $shipment->branch->name }}<br/>
+            {!! nl2br(e($shipment->branch->address)) !!}
+            @if($shipment->branch->phone)
+              <br/>Tel: {{ $shipment->branch->phone }}
+            @endif
           </div>
         @endif
-      </div>
-    </div>
-  </div>
-
-  {{-- ── SHIPPER & CONSIGNEE ── --}}
-  <div class="two-col">
-
-    @if($config['show_shipper_details'])
-    <div class="col">
-      <div class="section">
-        <div class="section-title">Shipper</div>
-        <div class="section-body">
-          <div class="lv">
-            <div class="lv-label">Name</div>
-            <div class="lv-value">{{ $shipment->shipper_name }}</div>
-          </div>
-          @if($shipment->shipper_company)
-          <div class="lv">
-            <div class="lv-label">Company</div>
-            <div class="lv-value">{{ $shipment->shipper_company }}</div>
-          </div>
-          @endif
-          <div class="lv">
-            <div class="lv-label">Phone</div>
-            <div class="lv-value">{{ $shipment->shipper_phone }}</div>
-          </div>
-          <div class="lv">
-            <div class="lv-label">Address</div>
-            <div class="lv-value">
-              {{ implode(', ', array_filter([
-                  $shipment->shipper_address_line1,
-                  $shipment->shipper_address_line2,
-                  $shipment->shipper_city,
-                  $shipment->shipper_state,
-                  $shipment->shipper_pincode,
-              ])) }}
-            </div>
-          </div>
-          @if($config['show_shipper_gst'] && $shipment->shipper_gst)
-          <div class="lv">
-            <div class="lv-label">GST</div>
-            <div class="lv-value">{{ $shipment->shipper_gst }}</div>
-          </div>
-          @endif
-        </div>
-      </div>
-    </div>
-    @endif
-
-    @if($config['show_consignee_details'])
-    <div class="col">
-      <div class="section">
-        <div class="section-title">Consignee</div>
-        <div class="section-body">
-          <div class="lv">
-            <div class="lv-label">Name</div>
-            <div class="lv-value">{{ $shipment->consignee_name }}</div>
-          </div>
-          <div class="lv">
-            <div class="lv-label">Phone</div>
-            <div class="lv-value">{{ $shipment->consignee_phone }}</div>
-          </div>
-          <div class="lv">
-            <div class="lv-label">Address</div>
-            <div class="lv-value">
-              {{ implode(', ', array_filter([
-                  $shipment->consignee_address,
-                  $shipment->consignee_city,
-                  $shipment->consignee_state,
-                  $shipment->consignee_pincode,
-              ])) }}
-            </div>
-          </div>
-          @if($config['show_consignee_gst'] && $shipment->consignee_gst)
-          <div class="lv">
-            <div class="lv-label">GST</div>
-            <div class="lv-value">{{ $shipment->consignee_gst }}</div>
-          </div>
-          @endif
-        </div>
-      </div>
-    </div>
-    @endif
-
-  </div>
-
-  {{-- ── SERVICE DETAILS ── --}}
-  <div class="section">
-    <div class="section-title">Service Details</div>
-    <div class="section-body">
-      <div class="two-col">
-        <div class="col">
-          <div class="lv">
-            <div class="lv-label">Service Type</div>
-            <div class="lv-value">{{ $shipment->service_type }}</div>
-          </div>
-          <div class="lv">
-            <div class="lv-label">Service</div>
-            <div class="lv-value">{{ $shipment->service }}</div>
-          </div>
-          <div class="lv">
-            <div class="lv-label">Payment Mode</div>
-            <div class="lv-value">{{ $shipment->payment_mode }}</div>
-          </div>
-        </div>
-        <div class="col">
-          @if($shipment->customer_ref)
-          <div class="lv">
-            <div class="lv-label">Customer Ref</div>
-            <div class="lv-value">{{ $shipment->customer_ref }}</div>
-          </div>
-          @endif
-          @if($shipment->parcel_content)
-          <div class="lv">
-            <div class="lv-label">Content</div>
-            <div class="lv-value">{{ $shipment->parcel_content }}</div>
-          </div>
-          @endif
-          @if($shipment->in_favour_of)
-          <div class="lv">
-            <div class="lv-label">In Favour Of</div>
-            <div class="lv-value">{{ $shipment->in_favour_of }} ({{ $shipment->payable_at }})</div>
-          </div>
-          @endif
-          @if($shipment->collectable_amount)
-          <div class="lv">
-            <div class="lv-label">Collectable Amount</div>
-            <div class="lv-value">₹{{ $shipment->collectable_amount }}</div>
-          </div>
-          @endif
-        </div>
-      </div>
-      @if($config['show_special_instructions'] && $shipment->special_instructions)
-      <div class="lv" style="margin-top: 6px;">
-        <div class="lv-label">Special Instructions</div>
-        <div class="lv-value">{{ $shipment->special_instructions }}</div>
-      </div>
-      @endif
-    </div>
-  </div>
-
-  {{-- ── PARCELS ── --}}
-  @if($config['show_parcel_dimensions'] && $shipment->parcels->count() > 0)
-  <div class="section">
-    <div class="section-title">{{ $shipment->service === 'Document' ? 'Document Dimensions' : 'Parcels' }}</div>
-    <div class="section-body">
-      <table>
-        <thead>
-          <tr>
-            <th>Length</th>
-            <th>Width</th>
-            <th>Height</th>
-            <th>Weight (kg)</th>
-            <th>Vol. Weight (kg)</th>
-            @if($shipment->service === 'Parcel')
-            <th>Boxes</th>
-            @endif
-          </tr>
-        </thead>
-        <tbody>
-          @foreach($shipment->parcels as $parcel)
-          <tr>
-            <td>{{ $parcel->length }}</td>
-            <td>{{ $parcel->width }}</td>
-            <td>{{ $parcel->height }}</td>
-            <td>{{ $parcel->weight }}</td>
-            <td>{{ $parcel->vol_weight }}</td>
-            @if($shipment->service === 'Parcel')
-            <td>{{ $parcel->num_boxes }}</td>
-            @endif
-          </tr>
-          @endforeach
-        </tbody>
-      </table>
-    </div>
-  </div>
-  @endif
-
-  {{-- ── INVOICES ── --}}
-  @if($config['show_invoice_details'] && $shipment->invoices->count() > 0)
-  <div class="section">
-    <div class="section-title">Invoices</div>
-    <div class="section-body">
-      <table>
-        <thead>
-          <tr>
-            <th>Invoice Number</th>
-            <th>Amount</th>
-            @if($config['show_eway_bill'])
-            <th>E-Way Bill</th>
-            @endif
-          </tr>
-        </thead>
-        <tbody>
-          @foreach($shipment->invoices as $invoice)
-          <tr>
-            <td>{{ $invoice->invoice_number }}</td>
-            <td>₹{{ $invoice->invoice_amount }}</td>
-            @if($config['show_eway_bill'])
-            <td>{{ $invoice->eway_bill ?? '—' }}</td>
-            @endif
-          </tr>
-          @endforeach
-        </tbody>
-      </table>
-    </div>
-  </div>
-  @endif
-
-  {{-- ── CHARGES ── --}}
-  @if($shipment->charges)
-  <div class="section">
-    <div class="section-title">Charges</div>
-    <div class="section-body">
-
-      @if($config['show_charges_breakdown'])
-      {{-- Full breakdown --}}
-      <div class="charges-grid">
-        @php
-          $chargeItems = [
-            'Freight'          => $shipment->charges->freight,
-            'Fuel'             => $shipment->charges->fuel,
-            'AWB Fee'          => $shipment->charges->awb_fee,
-            'FOV'              => $shipment->charges->fov,
-            'FOD'              => $shipment->charges->fod,
-            'DOD'              => $shipment->charges->dod,
-            'ODA'              => $shipment->charges->oda,
-            'Handling'         => $shipment->charges->handling,
-            'DCC'              => $shipment->charges->dcc,
-            'Pickup Charges'   => $shipment->charges->pickup_charges,
-            'Delivery Charges' => $shipment->charges->delivery_charges,
-          ];
-          if($shipment->charges->insurance_type === 'carrier') {
-            $chargeItems['Carrier Insurance'] = $shipment->charges->carrier_insurance;
-          }
-          // Filter out zero/null values
-          $chargeItems = array_filter($chargeItems, fn($v) => $v > 0);
-          $chunks = array_chunk(array_keys($chargeItems), 4, true);
-        @endphp
-
-        @foreach($chunks as $chunkKeys)
-        <div class="charges-row">
-          @foreach($chunkKeys as $label)
-          <div class="charges-cell">
-            <div class="lv-label">{{ $label }}</div>
-            <div class="lv-value">₹{{ $chargeItems[$label] }}</div>
-          </div>
-          @endforeach
-          {{-- Pad empty cells to maintain grid --}}
-          @for($i = count($chunkKeys); $i < 4; $i++)
-          <div class="charges-cell"></div>
-          @endfor
-        </div>
-        @endforeach
+        @if($vkGstin)
+          <div class="gst-line"><strong>GSTIN No:</strong> {{ $vkGstin }}</div>
+        @endif
       </div>
 
-      {{-- Totals --}}
-      <div class="totals-row">
-        <div class="total-box">
-          <div class="total-label">Total</div>
-          <div class="total-value">₹{{ $shipment->charges->total }}</div>
+      {{-- Customer (Shipper) Address --}}
+      <div class="addr-block">
+        <div class="addr-section-label">Customer Name &amp; Address</div>
+        <div class="addr-name">{{ $shipment->shipper_name }}</div>
+        @if($shipment->shipper_company_name)
+          <div class="addr-line">{{ $shipment->shipper_company_name }}</div>
+        @endif
+        <div class="addr-line">
+          {{ implode(', ', array_filter([
+              $shipment->shipper_address_line1,
+              $shipment->shipper_address_line2,
+              $shipment->shipper_city,
+              $shipment->shipper_state,
+              $shipment->shipper_pincode,
+          ])) }}
         </div>
-        <div class="total-box">
-          <div class="total-label">GST @18%</div>
-          <div class="total-value">₹{{ $shipment->charges->gst }}</div>
-        </div>
-        <div class="total-box grand">
-          <div class="total-label">Grand Total</div>
-          <div class="total-value">₹{{ $shipment->charges->grand_total }}</div>
+        @if($shipment->shipper_phone)
+          <div class="addr-line" style="margin-top:3px;">Tel: {{ $shipment->shipper_phone }}</div>
+        @endif
+        @if($shipment->shipper_gst)
+          <div class="gst-line"><strong>GSTIN No:</strong> {{ $shipment->shipper_gst }}</div>
+        @endif
+        @if($shipment->shipper_email)
+          <div class="gst-line"><strong>Email:</strong> {{ $shipment->shipper_email }}</div>
+        @endif
+      </div>
+
+    </div>{{-- end panel-left --}}
+
+    {{-- RIGHT: Invoice detail rows ── --}}
+    <div class="panel-right">
+
+      <div class="detail-row">
+        <div class="detail-key">Invoice No.</div>
+        <div class="detail-val">: {{ $invoice?->invoice_number ?? '—' }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-key">Invoice Date</div>
+        <div class="detail-val">
+          : {{ $invoice?->created_at
+              ? \Carbon\Carbon::parse($invoice->created_at)->format('d/m/Y')
+              : now()->format('d/m/Y') }}
         </div>
       </div>
 
-      @elseif($config['show_grand_total_only'])
-      {{-- Simplified Total + GST = Grand Total --}}
-      <div class="totals-row">
-        <div class="total-box">
-          <div class="total-label">Total</div>
-          <div class="total-value">₹{{ $shipment->charges->total }}</div>
-        </div>
-        <div class="total-box">
-          <div class="total-label">GST @18%</div>
-          <div class="total-value">₹{{ $shipment->charges->gst }}</div>
-        </div>
-        <div class="total-box grand">
-          <div class="total-label">Grand Total</div>
-          <div class="total-value">₹{{ $shipment->charges->grand_total }}</div>
-        </div>
+      <div class="detail-row">
+        <div class="detail-key">Description of Service</div>
+        <div class="detail-val">: Courier Service</div>
       </div>
+
+      <div class="detail-row">
+        <div class="detail-key">HSN / SAC No.</div>
+        <div class="detail-val">: 996812</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-key">State Code</div>
+        <div class="detail-val">: {{ $consigneeGstCode ?? '—' }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-key">Place of Supply</div>
+        <div class="detail-val">: {{ $placeOfSupply ?? '—' }}</div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-key">RCM Applicable</div>
+        <div class="detail-val">: N</div>
+      </div>
+
+      {{-- Taxable amount = pre-GST total --}}
+      <div class="detail-row">
+        <div class="detail-key">Taxable Amount</div>
+        <div class="detail-val">: ₹{{ number_format($shipment->charges?->total ?? 0, 2) }}</div>
+      </div>
+
+      @if($isIntraState)
+        <div class="detail-row">
+          <div class="detail-key">CGST @ 9%</div>
+          <div class="detail-val">: ₹{{ number_format($cgst, 2) }}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-key">SGST / UGST @ 9%</div>
+          <div class="detail-val">: ₹{{ number_format($sgst, 2) }}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-key">IGST @ 18%</div>
+          <div class="detail-val">: 0.00</div>
+        </div>
+      @else
+        <div class="detail-row">
+          <div class="detail-key">CGST @ 9%</div>
+          <div class="detail-val">: 0.00</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-key">SGST / UGST @ 9%</div>
+          <div class="detail-val">: 0.00</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-key">IGST @ 18%</div>
+          <div class="detail-val">: ₹{{ number_format($igst, 2) }}</div>
+        </div>
       @endif
 
-    </div>
-  </div>
-  @endif
+      {{-- K F Cess — commented until required --}}
+      {{--
+      <div class="detail-row">
+        <div class="detail-key">K F Cess @ 1%</div>
+        <div class="detail-val">: 0.00</div>
+      </div>
+      --}}
 
-  {{-- ── SIGNATURE ── --}}
-  <div class="signature-section">
-    <div class="sig-cell">
-      <div class="sig-line"></div>
-      <div class="sig-label">Receiver's Signature</div>
-    </div>
-    <div class="sig-cell">
-      <div class="sig-line"></div>
-      <div class="sig-label">Authorised Signatory</div>
-    </div>
-  </div>
+      <div class="detail-row grand-total">
+        <div class="detail-key">Grand Total</div>
+        <div class="detail-val">: ₹{{ number_format($grandTotal, 2) }}</div>
+      </div>
+
+      {{-- Amount in words --}}
+      <div class="amount-words">
+        {{ $amountInWords }}
+      </div>
+
+      {{-- Stamp & Sign --}}
+      <div class="stamp-box">
+        <div class="stamp-label">Stamp &amp; Sign :</div>
+        <div class="strike-note">*Strike whichever is not applicable.</div>
+      </div>
+
+    </div>{{-- end panel-right --}}
+
+  </div>{{-- end body-row --}}
 
   {{-- ── FOOTER ── --}}
-  <div class="footer">
-    Generated on {{ now()->format('d M Y, h:i A') }} &nbsp;|&nbsp;
-    AWB: {{ $shipment->awb_number }} &nbsp;|&nbsp;
-    VK Enterprises — Courier &amp; Logistics
+  <div class="footer-box">
+    @if($shipment->branch)
+      Registered Office: VK Enterprises,
+      {{ $shipment->branch->name }},
+      {{ $shipment->branch->address }}
+      @if($shipment->branch->phone) &nbsp;|&nbsp; Tel: {{ $shipment->branch->phone }} @endif
+      @if($shipment->branch->email) &nbsp;|&nbsp; Email: {{ $shipment->branch->email }} @endif
+    @endif
   </div>
 
-</div>
+</div>{{-- end invoice-box --}}
+</div>{{-- end page --}}
 </body>
 </html>

@@ -68,6 +68,7 @@ class CustomerController extends Controller
             'contact_person' => 'nullable|string|max:150',
             'contact_phone' => 'nullable|string|max:20',
             'same_address' => 'boolean',
+
             // Billing – always required
             'billing_name'            => 'required|string|max:150',
             'billing_company_name'    => 'nullable|string|max:255',
@@ -107,9 +108,22 @@ class CustomerController extends Controller
         }
 
         $data['customer_code'] = Customer::generateCustomerCode();
-        $data['created_by'] = auth()->id();
 
-        $customer = Customer::create($data);
+        $customer = Customer::create([
+            'customer_code' => $data['customer_code'],
+            'company_name' => $data['company_name'],
+            'type' => $data['type'],
+            'customer_type' => $data['customer_type'],
+            'gst_number' => $data['gst_number'] ?? null,
+            'gst_image_path' => $data['gst_image_path'] ?? null,
+            'pan_number' => $data['pan_number'] ?? null,
+            'pan_image_path' => $data['pan_image_path'] ?? null,
+            'aadhar_number' => $data['aadhar_number'] ?? null,
+            'aadhar_image_path' => $data['aadhar_image_path'] ?? null,
+            'contact_person' => $data['contact_person'] ?? null,
+            'contact_phone' => $data['contact_phone'] ?? null,
+            'created_by' => auth()->id(),
+        ]);
 
         $sameAddress = $request->boolean('same_address');
 
@@ -126,8 +140,6 @@ class CustomerController extends Controller
             'gst_number'          => $data['gst_number'] ?? null,
             'is_default_pickup'   => $sameAddress ? true : false,
         ];
-
-        // print_r($billingAddress); exit;
 
         $customer->addresses()->create($billingAddress);
 
@@ -173,7 +185,53 @@ class CustomerController extends Controller
      */
     public function update(Request $request, Customer $customer)
     {
-        //
+        $data = $request->validate([
+            'company_name' => 'sometimes|required|string|max:255',
+            'customer_type' => 'sometimes|required|in:cash,corporate',
+            'type' => 'sometimes|required|in:individual,company',
+            'gst_number' => 'nullable|string|max:50',
+            'gst_image_path' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'pan_number' => 'nullable|string|max:50',
+            'pan_image_path' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'aadhar_number' => 'nullable|string|max:50',
+            'aadhar_image_path' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'contact_person' => 'nullable|string|max:150',
+            'contact_phone' => 'nullable|string|max:20',
+        ]);
+
+        if ($request->hasFile('gst_image_path')) {
+            // Delete old image if exists
+            if ($customer->gst_image_path) {
+                Storage::disk('public')->delete($customer->gst_image_path);
+            }
+            $path = $request->file('gst_image_path')->store('customers/gst', 'public');
+            $data['gst_image_path'] = $path;
+        }
+
+        if ($request->hasFile('pan_image_path')) {
+            // Delete old image if exists
+            if ($customer->pan_image_path) {
+                Storage::disk('public')->delete($customer->pan_image_path);
+            }
+            $path = $request->file('pan_image_path')->store('customers/pan', 'public');
+            $data['pan_image_path'] = $path;
+        }
+
+        if ($request->hasFile('aadhar_image_path')) {
+            // Delete old image if exists
+            if ($customer->aadhar_image_path) {
+                Storage::disk('public')->delete($customer->aadhar_image_path);
+            }
+            $path = $request->file('aadhar_image_path')->store('customers/aadhar', 'public');
+            $data['aadhar_image_path'] = $path;
+        }
+
+        $customer->update($data);
+
+        return response()->json([
+            'message' => 'Customer updated successfully',
+            'data' => $customer
+        ]);
     }
 
     /**

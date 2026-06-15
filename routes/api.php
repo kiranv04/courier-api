@@ -6,10 +6,12 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\InvoicePdfController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\ManifestController;
 use App\Http\Controllers\Api\PincodeController;
 use App\Http\Controllers\Api\PrintConfigController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ShipmentController;
 use App\Http\Controllers\Api\ShipmentPdfController;
 use App\Http\Controllers\Api\ShipmentStatusController;
@@ -75,7 +77,15 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::get('/delivery/cod-summary', [DeliveryController::class, 'codSummary']);
 
       Route::get('/invoices', [InvoiceController::class, 'index']);
-      Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'show']);
+      Route::get('/invoices/preview-corporate', [InvoiceController::class, 'previewCorporate']);
+      Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
+      Route::post('/invoices/corporate', [InvoiceController::class, 'createCorporate']);
+      Route::get('/invoices/{invoice}/pdf', [InvoicePdfController::class, 'generate']);
+
+      Route::get('/reports/shipments', [ReportController::class, 'shipments']);
+      Route::get('/reports/shipments/pdf', [ReportController::class, 'shipmentsPdf']);
+      Route::get('/reports/invoices', [ReportController::class, 'invoices']);
+      Route::get('/reports/invoices/pdf', [ReportController::class, 'invoicesPdf']);
    });
 
 

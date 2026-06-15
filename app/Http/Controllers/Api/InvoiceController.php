@@ -200,7 +200,7 @@ class InvoiceController extends Controller
             ->whereIn('id', $data['shipment_ids'])
             ->where('customer_id', $data['customer_id'])
             ->where('branch_id', $data['branch_id'])
-            ->whereDoesntHave('vkInvoices')
+            // ->whereDoesntHave('invoices')
             ->get();
 
         if ($shipments->count() !== count($data['shipment_ids'])) {
@@ -261,7 +261,7 @@ class InvoiceController extends Controller
             ->where('customer_id', $customerId)
             ->where('branch_id', $branchId)
             ->whereNotIn('status', ['draft', 'cancelled'])
-            ->whereDoesntHave('vkInvoices')
+            ->whereDoesntHave('invoices')
             ->whereDate('booked_at', '>=', $fromDate)
             ->whereDate('booked_at', '<=', $toDate)
             ->orderBy('booked_at')

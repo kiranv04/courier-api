@@ -11,9 +11,9 @@ class Shipment extends Model
         'status', 'service_type', 'service', 'payment_mode',
         'shipper_name', 'shipper_company_name', 'shipper_phone', 'shipper_email',
         'shipper_gst', 'shipper_address_line1', 'shipper_address_line2',
-        'shipper_city', 'shipper_state', 'shipper_pincode',
+        'shipper_city', 'shipper_state_id', 'shipper_pincode',
         'consignee_name', 'receiver_name', 'consignee_phone', 'consignee_gst',
-        'consignee_address_line1', 'consignee_address_line2', 'consignee_pincode', 'consignee_city', 'consignee_state',
+        'consignee_address_line1', 'consignee_address_line2', 'consignee_pincode', 'consignee_city', 'consignee_state_id',
         'customer_reference', 'parcel_content', 'tracking_number', 'special_instructions',
         'in_favour_of', 'payable_at', 'collectable_amount',
         'created_by', 'booked_at',
@@ -75,7 +75,7 @@ class Shipment extends Model
         return $this->hasMany(ShipmentParcel::class);
     }
 
-    public function invoices()
+    public function shipmentInvoices()
     {
         return $this->hasMany(ShipmentInvoice::class);
     }
@@ -103,5 +103,10 @@ class Shipment extends Model
     public function printOverride()
     {
         return $this->hasOne(ShipmentPrintOverride::class);
+    }
+
+    public function invoices()
+{
+        return $this->belongsToMany(Invoice::class, 'invoice_shipments');
     }
 }

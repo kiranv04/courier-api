@@ -11,11 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('cfts', function (Blueprint $table) {
-            $table->id();
-            $table->decimal('cft_value', 10, 2)->unsigned();
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
+        Schema::table('cfts', function (Blueprint $table) {
+            $table->decimal('cft_value', 10, 2)->unsigned()->change();
         });
     }
 
@@ -24,6 +21,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('cfts');
+        // No need to revert the change as it is a modification of the existing column
     }
 };

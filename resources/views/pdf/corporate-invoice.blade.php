@@ -205,26 +205,7 @@
       background: #fafafa;
     }
 
-    /* Signatory block */
-    .signatory-block {
-      float: right;
-      text-align: center;
-      margin-top: 10px;
-      margin-right: 16px;
-      width: 180px;
-    }
-    .signatory-block .for-label {
-      font-size: 10px;
-      font-weight: bold;
-      margin-bottom: 36px;
-    }
-    .signatory-block .sig-line {
-      border-top: 1px solid #333;
-      padding-top: 3px;
-      font-size: 9px;
-      color: #444;
-    }
-    .clearfix::after { content: ''; display: table; clear: both; }
+    /* Signatory is now inline via style attributes — no class needed */
 
     /* ── T&C / footer ── */
     .tnc-section {
@@ -438,70 +419,85 @@
 <div class="page">
 <div class="invoice-box">
 
-  {{-- Page 2 header bar --}}
-  <div style="display:table;width:100%;border-bottom:1px solid #ccc;padding:5px 12px;">
-    <span style="font-weight:bold;font-size:10px;">Invoice No. {{ $vkInvoice->invoice_number }}</span>
-    &nbsp;&nbsp;&nbsp;
-    <span style="font-size:10px;">Period: {{ \Carbon\Carbon::parse($vkInvoice->from_date)->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($vkInvoice->to_date)->format('d/m/Y') }}</span>
-    <span style="float:right;font-size:10px;">Page 2 of 2</span>
+  {{-- Page 2 header bar — pure table, no floats ── --}}
+  <div style="display:table;width:100%;border-bottom:1px solid #ccc;">
+    <div style="display:table-cell;padding:5px 12px;font-weight:bold;font-size:10px;">
+      Invoice No. {{ $vkInvoice->invoice_number }}
+    </div>
+    <div style="display:table-cell;padding:5px 12px;font-size:10px;text-align:center;">
+      Period: {{ \Carbon\Carbon::parse($vkInvoice->from_date)->format('d/m/Y') }}
+      – {{ \Carbon\Carbon::parse($vkInvoice->to_date)->format('d/m/Y') }}
+    </div>
+    <div style="display:table-cell;padding:5px 12px;font-size:10px;text-align:right;">
+      Page 2 of 2
+    </div>
   </div>
 
-  {{-- Charge breakdown + signatory --}}
-  <div class="totals-section clearfix">
+  {{-- Charge breakdown (left) | Signatory (right) — table layout, no floats ── --}}
+  <div class="totals-section">
+    <div style="display:table;width:100%;">
 
-    {{-- Signatory (right side) --}}
-    <div class="signatory-block">
-      <div class="for-label">For VK Enterprises</div>
-      <div class="sig-line">Authorised Signatory</div>
-    </div>
+      {{-- Left cell: charge totals ── --}}
+      <div style="display:table-cell;width:60%;vertical-align:top;padding-right:24px;">
+        <table class="totals-table">
+          <tr>
+            <td class="t-label">Freight + VAS</td>
+            <td class="t-value">{{ number_format($vkInvoice->freight_vas, 2) }}</td>
+          </tr>
+          <tr>
+            <td class="t-label">Fuel Surcharge</td>
+            <td class="t-value">{{ number_format($vkInvoice->fuel_surcharge, 2) }}</td>
+          </tr>
+          @if($vkInvoice->fod_dod > 0)
+          <tr>
+            <td class="t-label">FOD / DOD</td>
+            <td class="t-value">{{ number_format($vkInvoice->fod_dod, 2) }}</td>
+          </tr>
+          @endif
+          <tr class="t-divider">
+            <td class="t-label"><strong>Total</strong></td>
+            <td class="t-value"><strong>{{ number_format($vkInvoice->subtotal, 2) }}</strong></td>
+          </tr>
+          <tr>
+            <td class="t-label">Net Amount</td>
+            <td class="t-value">{{ number_format($vkInvoice->subtotal, 2) }}</td>
+          </tr>
+          @if($isIntraState)
+            <tr>
+              <td class="t-label">CGST @ 9% on ₹{{ number_format($vkInvoice->subtotal, 2) }}</td>
+              <td class="t-value">{{ number_format($vkInvoice->cgst, 2) }}</td>
+            </tr>
+            <tr>
+              <td class="t-label">SGST @ 9% on ₹{{ number_format($vkInvoice->subtotal, 2) }}</td>
+              <td class="t-value">{{ number_format($vkInvoice->sgst, 2) }}</td>
+            </tr>
+          @else
+            <tr>
+              <td class="t-label">IGST @ 18% on ₹{{ number_format($vkInvoice->subtotal, 2) }}</td>
+              <td class="t-value">{{ number_format($vkInvoice->igst, 2) }}</td>
+            </tr>
+          @endif
+          <tr class="t-grand">
+            <td class="t-label">Grand Total</td>
+            <td class="t-value">{{ number_format($vkInvoice->grand_total, 2) }}</td>
+          </tr>
+        </table>
+      </div>
 
-    {{-- Charge totals (left/center) --}}
-    <table class="totals-table">
-      <tr>
-        <td class="t-label">Freight + VAS</td>
-        <td class="t-value">{{ number_format($vkInvoice->freight_vas, 2) }}</td>
-      </tr>
-      <tr>
-        <td class="t-label">Fuel Surcharge</td>
-        <td class="t-value">{{ number_format($vkInvoice->fuel_surcharge, 2) }}</td>
-      </tr>
-      @if($vkInvoice->fod_dod > 0)
-      <tr>
-        <td class="t-label">FOD / DOD</td>
-        <td class="t-value">{{ number_format($vkInvoice->fod_dod, 2) }}</td>
-      </tr>
-      @endif
-      <tr class="t-divider">
-        <td class="t-label"><strong>Total</strong></td>
-        <td class="t-value"><strong>{{ number_format($vkInvoice->subtotal, 2) }}</strong></td>
-      </tr>
-      <tr>
-        <td class="t-label">Net Amount</td>
-        <td class="t-value">{{ number_format($vkInvoice->subtotal, 2) }}</td>
-      </tr>
-      @if($isIntraState)
-        <tr>
-          <td class="t-label">CGST @ 9% on ₹{{ number_format($vkInvoice->subtotal, 2) }}</td>
-          <td class="t-value">{{ number_format($vkInvoice->cgst, 2) }}</td>
-        </tr>
-        <tr>
-          <td class="t-label">SGST @ 9% on ₹{{ number_format($vkInvoice->subtotal, 2) }}</td>
-          <td class="t-value">{{ number_format($vkInvoice->sgst, 2) }}</td>
-        </tr>
-      @else
-        <tr>
-          <td class="t-label">IGST @ 18% on ₹{{ number_format($vkInvoice->subtotal, 2) }}</td>
-          <td class="t-value">{{ number_format($vkInvoice->igst, 2) }}</td>
-        </tr>
-      @endif
-      <tr class="t-grand">
-        <td class="t-label">Grand Total</td>
-        <td class="t-value">{{ number_format($vkInvoice->grand_total, 2) }}</td>
-      </tr>
-    </table>
+      {{-- Right cell: signatory ── --}}
+      <div style="display:table-cell;width:40%;vertical-align:top;text-align:center;padding-top:6px;">
+        <div style="font-size:10px;font-weight:bold;margin-bottom:52px;">
+          For VK Enterprises
+        </div>
+        <div style="border-top:1px solid #333;padding-top:4px;font-size:9px;color:#444;">
+          Authorised Signatory
+        </div>
+      </div>
 
-    {{-- Amount in words --}}
-    <div class="amount-words-line" style="clear:both;margin-top:12px;">
+    </div>{{-- end two-col table --}}
+
+    {{-- Amount in words — full width below ── --}}
+    <div class="amount-words-line" style="margin-top:12px;">
       {{ $amountInWords }}
     </div>
 

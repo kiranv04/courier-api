@@ -213,7 +213,7 @@ class ShipmentController extends Controller
 
             // Invoices
             if (!empty($data['invoices'])) {
-                $shipment->invoices()->createMany(
+                $shipment->shipmentInvoices()->createMany(
                     collect($data['invoices'])->map(fn($i) => [
                         'invoice_number' => $i['invoiceNumber'],
                         'invoice_amount' => $i['invoiceAmount'],
@@ -289,7 +289,7 @@ class ShipmentController extends Controller
 
             return response()->json([
                 'message'  => 'Shipment ' . $data['status'] . ' successfully!',
-                'data'     => $shipment->load(['parcels', 'invoices', 'charges', 'events']),
+                'data'     => $shipment->load(['parcels', 'shipmentInvoices', 'charges', 'events']),
             ], 201);
 
         } catch (\Exception $e) {
@@ -304,7 +304,7 @@ class ShipmentController extends Controller
     public function show(Shipment $shipment)
     {
         return response()->json([
-            'data' => $shipment->load(['parcels', 'invoices', 'charges', 'events.entity', 'events.createdBy', 'assignments.assignedTo'])
+            'data' => $shipment->load(['parcels', 'shipmentInvoices', 'charges', 'events.entity', 'events.createdBy', 'assignments.assignedTo'])
         ]);
     }
 
@@ -466,9 +466,9 @@ class ShipmentController extends Controller
             }
 
             // Invoices — delete and recreate
-            $shipment->invoices()->delete();
+            $shipment->shipmentInvoices()->delete();
             if (!empty($data['invoices'])) {
-                $shipment->invoices()->createMany(
+                $shipment->shipmentInvoices()->createMany(
                     collect($data['invoices'])->map(fn($i) => [
                         'invoice_number' => $i['invoiceNumber'],
                         'invoice_amount' => $i['invoiceAmount'],
@@ -558,7 +558,7 @@ class ShipmentController extends Controller
 
             return response()->json([
                 'message' => 'Shipment updated successfully!',
-                'data'    => $shipment->fresh()->load(['parcels', 'invoices', 'charges', 'events']),
+                'data'    => $shipment->fresh()->load(['parcels', 'shipmentInvoices', 'charges', 'events']),
             ]);
 
         } catch (\Exception $e) {

@@ -16,7 +16,7 @@ class ShipmentPdfController extends Controller
         // Load all required relations
         $shipment->load([
             'parcels',
-            'invoices',
+            'shipmentInvoices',
             'charges',
             'branch.location.state',
             'customer',
@@ -38,7 +38,8 @@ class ShipmentPdfController extends Controller
         // ── Consignee state info ──────────────────────────────────
         // consignee_state is stored as a state name string on the shipment
         // We look it up in states table to get its gst_code
-        $consigneeStateName = $shipment->consignee_state;
+        $consigneeState = $shipment->consignee_state_id;
+        $consigneeStateName = \App\Models\State::where('id', $consigneeState)->value('name');
         $consigneeStateRecord = \App\Models\State::where('name', $consigneeStateName)->first();
         $consigneeGstCode   = $consigneeStateRecord?->gst_code; // e.g. "29"
 

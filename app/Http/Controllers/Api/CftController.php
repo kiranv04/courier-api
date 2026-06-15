@@ -25,7 +25,7 @@ class CftController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'cft_value' => 'required|integer|min:0|max:255',
+            'cft_value' => 'required|decimal:1,2|min:5',
         ]);
 
         $cft = Cft::create($data);
@@ -50,7 +50,7 @@ class CftController extends Controller
     public function update(Request $request, Cft $cft)
     {
         $data = $request->validate([
-            'cft_value' => 'required|integer|min:0|max:255',
+            'cft_value' => 'required|decimal:1,2|min:5',
         ]);
 
         $cft->update($data);

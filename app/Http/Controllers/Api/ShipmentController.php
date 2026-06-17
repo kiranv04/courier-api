@@ -110,7 +110,7 @@ class ShipmentController extends Controller
 
             // Rates
             'rates'                         => 'nullable|array',
-            'rates.cft'                     => 'nullable|integer',
+            'rates.cft'                     => 'nullable|decimal:0,1,2',
             'rates.chargeableWeight'        => 'nullable|numeric',
             'rates.packageYield'            => 'nullable|numeric',
             'rates.freight'                 => 'nullable|numeric',
@@ -370,7 +370,7 @@ class ShipmentController extends Controller
             'docDimensions.weight'  => 'required_if:service.service,Document|numeric',
 
             'rates'                         => 'nullable|array',
-            'rates.cft'                     => 'nullable|integer',
+            'rates.cft'                     => 'nullable|decimal:0,1,2',
             'rates.chargeableWeight'        => 'nullable|numeric',
             'rates.packageYield'            => 'nullable|numeric',
             'rates.freight'                 => 'nullable|numeric',

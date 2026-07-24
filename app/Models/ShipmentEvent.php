@@ -9,7 +9,8 @@ class ShipmentEvent extends Model
     // public $timestamps = false;
 
     protected $fillable = [
-        'shipment_id', 'event_type', 'entity_id', 'entity_type', 'notes', 'created_by', 
+        'shipment_id', 'event_type', 'entity_id', 'entity_type', 'notes', 'received_by',
+        'created_by', 
     ];
 
     const UPDATED_AT = null; // disable updated_at

@@ -61,6 +61,7 @@ class DeliveryController extends Controller
 
         $data = $request->validate([
             'cod_amount_collected' => 'nullable|numeric|min:0',
+            'received_by'          => 'nullable|string|max:150',
         ]);
 
         try {
@@ -74,6 +75,7 @@ class DeliveryController extends Controller
                 'entity_type' => 'App\\Models\\User',
                 'entity_id'   => $user->id,
                 'notes'       => 'Delivered by ' . $user->name,
+                'received_by' => $data['received_by'] ?? null,
                 'created_by'  => $user->id,
             ]);
 

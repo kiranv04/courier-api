@@ -18,6 +18,8 @@ class InvoicePdfController extends Controller
             'customer.addresses',
             'shipments.charges',
             'shipments.parcels',
+            'shipments.manifests' => fn($q) => $q->where('type', 'pickup'),
+            'shipments.events'    => fn($q) => $q->where('event_type', 'delivered'),
             'createdBy',
         ]);
  
@@ -43,7 +45,7 @@ class InvoicePdfController extends Controller
  
         $isIntraState = $branchStateName && $customerStateRecord
             && strtolower(trim($branchStateName)) === strtolower(trim($customerStateRecord->name ?? ''));
- 
+
         // ── Amount in words ───────────────────────────────────────
         $amountInWords = AmountInWords::convert($invoice->grand_total);
  

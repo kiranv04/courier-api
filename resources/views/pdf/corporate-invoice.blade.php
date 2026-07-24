@@ -345,7 +345,7 @@
         <div class="dv">: N</div>
       </div>
       <div class="drow">
-        <div class="dk">HSN / SAC No.</div>
+        <div class="dk">SAC Code</div>
         <div class="dv">: 996812</div>
       </div>
       <div class="drow">
@@ -371,37 +371,53 @@
   <table class="shipments">
     <thead>
       <tr>
-        <th>S.No</th>
-        <th>Ship Date</th>
-        <th>AWB</th>
+        <th>SLNo</th>
+        <th>P</th>
+        <th>Awb No</th>
+        <th>P/U Date</th>
+        <th>Pcs</th>
+        <th>Wgt</th>
+        <th>St Date</th>
+        <th>Time</th>
+        <th>Revd By</th>
         <th>Destination</th>
-        <th>Type</th>
-        <th>Chrg Wt (kg)</th>
-        <th>Amount (₹)</th>
+        <th>Consignee</th>
+        <th>Rate (₹)</th>
       </tr>
     </thead>
     <tbody>
       @php $shipmentTotal = 0; @endphp
       @foreach($vkInvoice->shipments as $i => $s)
         @php
+          $pieces           = $s->parcels->sum('num_boxes');
           $chargeableWeight = $s->charges?->chargeable_weight ?? 0;
-          $rowAmount        = $s->charges?->grand_total ?? 0;
+          $rowAmount        = $s->charges?->total ?? 0;
           $shipmentTotal   += $rowAmount;
+
+          $pickupManifest = $s->manifests->first();  // already scoped to type=pickup
+          $deliveredEvent = $s->events->first();      // already scoped to event_type=delivered
+
+          $serviceCode = strtoupper(substr($s->service_type ?? $s->service ?? '', 0, 1));
         @endphp
         <tr>
           <td>{{ $i + 1 }}</td>
-          <td>{{ \Carbon\Carbon::parse($s->booked_at)->format('d/m/Y') }}</td>
+          <td>{{ $serviceCode ?: '—' }}</td>
           <td>{{ $s->awb_number }}</td>
-          <td>{{ $s->consignee_city ?? '—' }}</td>
-          <td>{{ $s->service_type ?? $s->service }}</td>
+          <td>{{ $pickupManifest ? \Carbon\Carbon::parse($pickupManifest->created_at)->format('d/m/Y') : '—' }}</td>
+          <td style="text-align:right;">{{ $pieces }}</td>
           <td style="text-align:right;">{{ number_format($chargeableWeight, 2) }}</td>
+          <td>{{ $deliveredEvent ? \Carbon\Carbon::parse($deliveredEvent->created_at)->format('d/m/Y') : '—' }}</td>
+          <td>{{ $deliveredEvent ? \Carbon\Carbon::parse($deliveredEvent->created_at)->format('H:i') : '—' }}</td>
+          <td>{{ $deliveredEvent?->received_by ?? '—' }}</td>
+          <td>{{ $s->consignee_city ?? '—' }}</td>
+          <td>{{ $s->consignee_name  ?? '-' }}</td>
           <td style="text-align:right;">{{ number_format($rowAmount, 2) }}</td>
         </tr>
       @endforeach
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="6" style="text-align:right;">Total</td>
+        <td colspan="11" style="text-align:right;">Total</td>
         <td style="text-align:right;">{{ number_format($shipmentTotal, 2) }}</td>
       </tr>
     </tfoot>
@@ -471,7 +487,7 @@
               <td class="t-label">SGST @ 9% on ₹{{ number_format($vkInvoice->subtotal, 2) }}</td>
               <td class="t-value">{{ number_format($vkInvoice->sgst, 2) }}</td>
             </tr>
-          @else
+          
             <tr>
               <td class="t-label">IGST @ 18% on ₹{{ number_format($vkInvoice->subtotal, 2) }}</td>
               <td class="t-value">{{ number_format($vkInvoice->igst, 2) }}</td>

@@ -106,7 +106,12 @@ class Shipment extends Model
     }
 
     public function invoices()
-{
+    {
         return $this->belongsToMany(Invoice::class, 'invoice_shipments');
+    }
+
+    public function manifests()
+    {
+        return $this->belongsToMany(Manifest::class, 'manifest_shipments')->withTimestamps();
     }
 }

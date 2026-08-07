@@ -242,4 +242,79 @@ class ReportController extends Controller
 
         return array_values($grouped);
     }
+
+    public function shipmentsDetail(Request $request): JsonResponse
+    {
+        $user    = auth()->user();
+        $isAdmin = $user->hasAnyRole(['super-admin', 'admin']);
+
+        $query = Shipment::with(['customer:id,company_name,customer_type'])
+            ->whereNotNull('booked_at')
+            ->select('id', 'awb_number', 'status', 'customer_id', 'branch_id',
+                    'consignee_name', 'consignee_city', 'service_type', 'booked_at');
+
+        if (!$isAdmin) {
+            $query->where('branch_id', $user->owner_id);
+        } elseif ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->branch_id);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('customer_type')) {
+            $query->whereHas('customer', fn($q) => $q->where('customer_type', $request->customer_type));
+        }
+
+        if ($request->filled('service_type')) {
+            $query->where('service_type', $request->service_type);
+        }
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('booked_at', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('booked_at', '<=', $request->date_to);
+        }
+
+        return response()->json(['data' => $query->orderByDesc('booked_at')->paginate(20)]);
+    }
+
+    // ── Invoice drill-down ──────────────────────────────────────
+
+    public function invoicesDetail(Request $request): JsonResponse
+    {
+        $user    = auth()->user();
+        $isAdmin = $user->hasAnyRole(['super-admin', 'admin']);
+
+        $query = Invoice::with(['customer:id,company_name,customer_type'])
+            ->select('id', 'invoice_number', 'type', 'customer_id', 'branch_id',
+                    'grand_total', 'created_at');
+
+        if (!$isAdmin) {
+            $query->where('branch_id', $user->owner_id);
+        } elseif ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->branch_id);
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        if ($request->filled('customer_type')) {
+            $query->whereHas('customer', fn($q) => $q->where('customer_type', $request->customer_type));
+        }
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        return response()->json(['data' => $query->orderByDesc('created_at')->paginate(20)]);
+    }
 }

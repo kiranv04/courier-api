@@ -86,6 +86,8 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::get('/reports/shipments/pdf', [ReportController::class, 'shipmentsPdf']);
       Route::get('/reports/invoices', [ReportController::class, 'invoices']);
       Route::get('/reports/invoices/pdf', [ReportController::class, 'invoicesPdf']);
+      Route::get('/reports/shipments/detail', [ReportController::class, 'shipmentsDetail']);
+      Route::get('/reports/invoices/detail', [ReportController::class, 'invoicesDetail']);
    });
 
 

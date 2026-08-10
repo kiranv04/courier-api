@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\PincodeController;
 use App\Http\Controllers\Api\PrintConfigController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ShipmentController;
+use App\Http\Controllers\Api\ShipmentPaymentController;
 use App\Http\Controllers\Api\ShipmentPdfController;
 use App\Http\Controllers\Api\ShipmentStatusController;
 use App\Http\Controllers\Api\StateController;
@@ -74,6 +75,9 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::get('/shipments/{shipment}/print-config', [PrintConfigController::class, 'getEffectiveForShipment']); // Effective config for a shipment (used by print modal)
       Route::get('/shipments/{shipment}/pdf', [ShipmentPdfController::class, 'generate']); // PDF generation
 
+      Route::get('/shipments/{shipment}/payment', [ShipmentPaymentController::class, 'show']);
+      Route::post('/shipments/{shipment}/payment', [ShipmentPaymentController::class, 'store']);
+      
       Route::get('/delivery/cod-summary', [DeliveryController::class, 'codSummary']);
 
       Route::get('/invoices', [InvoiceController::class, 'index']);

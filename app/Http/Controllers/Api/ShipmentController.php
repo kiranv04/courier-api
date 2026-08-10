@@ -19,8 +19,8 @@ class ShipmentController extends Controller
     {
         $user = auth()->user();
         $isBranchAdmin = $user->hasRole('branch-admin');
-
-        $shipments = Shipment::with(['charges', 'latestEvent', 'branch', 'customer'])
+ 
+        $shipments = Shipment::with(['charges', 'latestEvent', 'branch', 'customer', 'payment'])
             // Branch admins are always scoped to their branch
             ->when($isBranchAdmin, fn($q) => $q->where('branch_id', $user->owner_id))
             // Admin optional branch filter
@@ -33,7 +33,7 @@ class ShipmentController extends Controller
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->orderByDesc('created_at')
             ->paginate(20);
-
+ 
         return response()->json(['data' => $shipments]);
     }
 
@@ -304,7 +304,7 @@ class ShipmentController extends Controller
     public function show(Shipment $shipment)
     {
         return response()->json([
-            'data' => $shipment->load(['parcels', 'shipmentInvoices', 'charges', 'events.entity', 'events.createdBy', 'assignments.assignedTo'])
+            'data' => $shipment->load(['parcels', 'shipmentInvoices', 'charges', 'events.entity', 'events.createdBy', 'assignments.assignedTo', 'customer']),
         ]);
     }
 

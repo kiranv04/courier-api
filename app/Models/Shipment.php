@@ -100,6 +100,11 @@ class Shipment extends Model
         return $this->hasMany(ShipmentAssignment::class);
     }
 
+    public function payment()
+    {
+        return $this->hasOne(ShipmentPayment::class);
+    }
+
     public function printOverride()
     {
         return $this->hasOne(ShipmentPrintOverride::class);

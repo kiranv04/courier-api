@@ -25,6 +25,8 @@ class Invoice extends Model
         'igst',
         'grand_total',
         'status',
+        'payment_status',
+        'paid_at',
         'created_by',
     ];
 
@@ -39,6 +41,7 @@ class Invoice extends Model
         'sgst'           => 'decimal:2',
         'igst'           => 'decimal:2',
         'grand_total'    => 'decimal:2',
+        'paid_at'        => 'datetime',
     ];
 
     // ── Relationships ────────────────────────────────────────────

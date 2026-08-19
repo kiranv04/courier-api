@@ -29,4 +29,9 @@ class Branch extends Model
     {
         return $this->belongsTo(Location::class);
     }
+
+    public function branchSetting()
+    {
+        return $this->hasOne(BranchSetting::class);
+    }
 }

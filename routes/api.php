@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ManifestController;
 use App\Http\Controllers\Api\PincodeController;
 use App\Http\Controllers\Api\PrintConfigController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\ShipmentController;
 use App\Http\Controllers\Api\ShipmentPaymentController;
 use App\Http\Controllers\Api\ShipmentPdfController;
@@ -42,6 +43,20 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::post('/cfts/{id}/activate', [CftController::class, 'activate']);
    });
 
+   // ────────────────────────────────────────────────
+   // Super-admin only – company & branch settings
+   // ────────────────────────────────────────────────
+   Route::middleware('role:super-admin')->group(function () {
+ 
+      Route::get('/settings/company', [SettingsController::class, 'showCompany']);
+      Route::put('/settings/company', [SettingsController::class, 'updateCompany']);
+      Route::post('/settings/company/logo', [SettingsController::class, 'uploadLogo']);
+      Route::post('/settings/company/bank-qr', [SettingsController::class, 'uploadBankQr']);
+      Route::delete('/settings/company/bank-qr', [SettingsController::class, 'deleteBankQr']);
+
+      Route::get('/settings/branches/{branch}', [SettingsController::class, 'showBranch']);
+      Route::put('/settings/branches/{branch}', [SettingsController::class, 'updateBranch']);
+   });
 
    // ────────────────────────────────────────────────
    // Branch scoped operations (list / create / etc.)

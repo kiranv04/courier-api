@@ -21,6 +21,11 @@ class AuthController extends Controller
         if(Auth::attempt($credentials)){
             $user = Auth::user();
 
+            if (! $user->is_active) {
+                Auth::logout();
+                return response()->json(['message' => 'Your account has been deactivated. Please contact your administrator.'], 403);
+            }
+
             return response()->json([
                 'message' => 'Login Successful!',
                 'user' => $user,

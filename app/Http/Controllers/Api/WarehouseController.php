@@ -27,10 +27,15 @@ class WarehouseController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'required|string|max:100|unique:warehouses,code',
+            'phone' => 'required|string|max:20',
+            'email' => 'required|email|max:125',
+            'addressLine1' => 'required|string|max:255',
+            'addressLine2' => 'required|string|max:255',
+            'addressLine3' => 'required|string|max:255',
             'location_id' => 'required|exists:locations,id',
-            'address' => 'required|string|max:500',
-            'phone' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:125',
+            'region' => 'nullable|string|max:255',
+            'pincode' => 'nullable|string|max:6',
+            'state' => 'required|exists:states,id'
         ]);
 
         $warehouse = Warehouse::create($data);

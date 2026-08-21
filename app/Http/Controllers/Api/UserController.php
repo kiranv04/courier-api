@@ -39,6 +39,9 @@ class UserController extends Controller
             'must_change_password' => 'sometimes|boolean',
             'owner_type' => 'nullable|required_with:owner_id|string',
             'owner_id'   => 'nullable|required_with:owner_type|integer',
+            'phone' => 'required|string|max:10|min:10',
+            'yield_ratio_door' => 'nullable|string',
+            'yield_ratio_warehouse' => 'nullable|string',
         ]);
 
         $data['password'] = Hash::make($data['password']);
@@ -80,7 +83,10 @@ class UserController extends Controller
             'name'     => 'required|string|max:255',
             'email'    => 'required|email|string|max:255|unique:users,email,' . $user->id,
             'owner_type' => 'nullable|required_with:owner_id|string',
-            'owner_id'   => 'nullable|required_with:owner_type|integer'
+            'owner_id'   => 'nullable|required_with:owner_type|integer',
+            'phone' => 'required|string|min:10|max:10',
+            'yield_ratio_door' => 'nullable|string',
+            'yield_ratio_warehouse' => 'nullable|string',
         ]);
 
         $user->update($updateFields);

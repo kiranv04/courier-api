@@ -13,10 +13,18 @@ class Branch extends Model
         'name',
         'code',
         'location_id',
-        'address',
+        'address_line_1',
+        'address_line_2',
+        'address_line_3',
         'phone',
         'email',
-        'yield_ratio',
+        'yield_ratio_door',
+        'yield_ratio_warehouse',
+        'region',
+        'pincode',
+        'state_id',
+        'discount',
+        'discount_type',
         'is_active',
     ];
 
@@ -28,6 +36,11 @@ class Branch extends Model
     public function location()
     {
         return $this->belongsTo(Location::class);
+    }
+
+    public function state()
+    {
+        return $this->belongsTo(State::class);
     }
 
     public function branchSetting()

@@ -38,7 +38,19 @@ class WarehouseController extends Controller
             'state' => 'required|exists:states,id'
         ]);
 
-        $warehouse = Warehouse::create($data);
+        $warehouse = Warehouse::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'code' => $data['code'],
+            'location_id' => $data['location_id'],
+            'address_line_1' => $data['addressLine1'],
+            'address_line_2' => $data['addressLine2'],
+            'address_line_3' => $data['addressLine3'],
+            'phone' => $data['phone'],
+            'region' => $data['region'],
+            'pincode' => $data['pincode'],
+            'state_id' => $data['state'],
+        ]);
 
         return response()->json([
             'message' => 'Warehouse created successfully',
@@ -63,12 +75,29 @@ class WarehouseController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'code' => 'sometimes|required|string|max:100|unique:warehouses,code,' . $warehouse->id,
             'location_id' => 'sometimes|required|exists:locations,id',
-            'address' => 'sometimes|required|string|max:500',
+            'addressLine1' => 'required|string|max:255',
+            'addressLine2' => 'required|string|max:255',
+            'addressLine3' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:125',
+            'region' => 'nullable|string|max:255',
+            'pincode' => 'nullable|string|max:6',
+            'state' => 'required|exists:states,id'
         ]);
 
-        $warehouse->update($data);
+        $warehouse->update([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'code' => $data['code'],
+            'location_id' => $data['location_id'],
+            'address_line_1' => $data['addressLine1'],
+            'address_line_2' => $data['addressLine2'],
+            'address_line_3' => $data['addressLine3'],
+            'phone' => $data['phone'],
+            'region' => $data['region'],
+            'pincode' => $data['pincode'],
+            'state_id' => $data['state'],
+        ]);
 
         return response()->json([
             'message' => 'Warehouse updated successfully',

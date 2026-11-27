@@ -58,12 +58,8 @@ class DashboardController extends Controller
         $today       = now()->toDateString();
 
         // Shipments currently at this warehouse
-        $latestEventIds = ShipmentEvent::select(DB::raw('MAX(id) as id'))
-            ->groupBy('shipment_id')
-            ->pluck('id');
-
-        // From those latest events, find ones that are at_hub at this warehouse
-        $atHubIds = ShipmentEvent::whereIn('id', $latestEventIds)
+        // From each shipment's latest event, find ones that are at_hub at this warehouse
+        $atHubIds = ShipmentEvent::latestPerShipment()
             ->where('entity_type', 'App\\Models\\Warehouse')
             ->where('entity_id', $warehouseId)
             ->where('event_type', 'at_hub')

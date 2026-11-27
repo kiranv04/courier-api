@@ -24,9 +24,10 @@ use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
 
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/driver/login', [AuthController::class, 'driverLogin'])->middleware('throttle:10,1');
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'password.changed'])->group(function () {
 
    // ────────────────────────────────────────────────
    // Super-admin + admin only – full power
@@ -39,8 +40,13 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::apiResource('warehouses', WarehouseController::class);
       Route::post('/warehouses/{id}/activate', [WarehouseController::class, 'activate']);
       
-      Route::apiResource('cfts', CftController::class);
+      Route::apiResource('cfts', CftController::class)->except('show');
       Route::post('/cfts/{id}/activate', [CftController::class, 'activate']);
+
+      Route::apiResource('locations', LocationController::class);
+      Route::post('/locations/{id}/activate', [LocationController::class, 'activate']);
+
+      Route::get('/dashboard/superadmin', [DashboardController::class, 'superadmin']);
    });
 
    // ────────────────────────────────────────────────
@@ -63,21 +69,10 @@ Route::middleware('auth:sanctum')->group(function () {
    // ────────────────────────────────────────────────
    Route::middleware('role:super-admin|admin|branch-admin|branch-employee|warehouse-admin|warehouse-employee')->group(function () {
 
-      Route::apiResource('users', UserController::class);
-      Route::post('/users/{id}/activate', [UserController::class, 'activate']);
-      Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
-      Route::get('/users/branch/{branchId}', [UserController::class, 'branchUsers']);
-
       Route::get('/cfts', [CftController::class, 'index']);
 
       Route::get('/branches/{branch}', [BranchController::class, 'show']);
       
-      Route::apiResource('customers', CustomerController::class);
-      Route::post('/customers/{id}/activate', [CustomerController::class, 'activate']);
-      Route::get('/customers/{customer}/print-config', [PrintConfigController::class, 'getForCustomer']);
-      Route::post('/customers/{customer}/print-config', [PrintConfigController::class, 'saveForCustomer']);
-      Route::delete('/customers/{customer}/print-config', [PrintConfigController::class, 'resetForCustomer']);
-
       Route::get('/shipments/destinations', [ShipmentStatusController::class, 'destinations']);
       Route::get('/shipments/delivery-agents', [ShipmentStatusController::class, 'deliveryAgents']);
       Route::get('/shipments/{shipment}/transitions', [ShipmentStatusController::class, 'nextTransitions']);
@@ -85,7 +80,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
       Route::apiResource('shipments', ShipmentController::class)->only(['index', 'store', 'update']);
       Route::get('/shipments/{shipment}', [ShipmentController::class, 'show']);
-      Route::patch('/shipments/{shipment}/status', [ShipmentController::class, 'updateStatus']);
       Route::post('/shipments/{shipment}/print-override', [PrintConfigController::class, 'saveOverride']); // Shipment print override
       Route::get('/shipments/{shipment}/print-config', [PrintConfigController::class, 'getEffectiveForShipment']); // Effective config for a shipment (used by print modal)
       Route::get('/shipments/{shipment}/pdf', [ShipmentPdfController::class, 'generate']); // PDF generation
@@ -94,6 +88,26 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::post('/shipments/{shipment}/payment', [ShipmentPaymentController::class, 'store']);
       
       Route::get('/delivery/cod-summary', [DeliveryController::class, 'codSummary']);
+
+      Route::get('/manifests/eligible-shipments', [ManifestController::class, 'eligibleShipments']);
+      Route::post('/manifests/{manifest}/close', [ManifestController::class, 'close']);
+      Route::apiResource('manifests', ManifestController::class)->only(['index', 'show', 'store']);
+   });
+
+
+   // ────────────────────────────────────────────────
+   // Warehouse scoped (very limited)
+   // ────────────────────────────────────────────────
+   // Customers, invoices and reports are head-office / branch data. Warehouse roles have no
+   // screens for them and their owner_id is a warehouse id, so they must not reach these.
+   Route::middleware('role:super-admin|admin|branch-admin|branch-employee')->group(function () {
+
+      Route::apiResource('customers', CustomerController::class);
+      Route::post('/customers/{id}/activate', [CustomerController::class, 'activate']);
+      Route::get('/customers/{customer}/documents/{type}', [CustomerController::class, 'document']);
+      Route::get('/customers/{customer}/print-config', [PrintConfigController::class, 'getForCustomer']);
+      Route::post('/customers/{customer}/print-config', [PrintConfigController::class, 'saveForCustomer']);
+      Route::delete('/customers/{customer}/print-config', [PrintConfigController::class, 'resetForCustomer']);
 
       Route::get('/invoices', [InvoiceController::class, 'index']);
       Route::get('/invoices/preview-corporate', [InvoiceController::class, 'previewCorporate']);
@@ -109,12 +123,22 @@ Route::middleware('auth:sanctum')->group(function () {
       Route::get('/reports/invoices/detail', [ReportController::class, 'invoicesDetail']);
    });
 
-
-   // ────────────────────────────────────────────────
-   // Warehouse scoped (very limited)
-   // ────────────────────────────────────────────────
-   Route::middleware('role:warehouse-admin')->group(function () {
+   // User management: head office manages everyone; branch/warehouse admins are
+   // restricted to their own branch/warehouse staff inside UserController.
+   Route::middleware('role:super-admin|admin|branch-admin|warehouse-admin')->group(function () {
+      Route::apiResource('users', UserController::class);
+      Route::post('/users/{id}/activate', [UserController::class, 'activate']);
+      Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
+      Route::get('/users/branch/{branchId}', [UserController::class, 'branchUsers']);
       Route::get('/users/warehouse/{warehouseId}', [UserController::class, 'warehouseUsers']);
+   });
+
+   Route::middleware('role:warehouse-admin|warehouse-employee')->group(function () {
+      Route::get('/dashboard/warehouse', [DashboardController::class, 'warehouse']);
+   });
+
+   Route::middleware('role:branch-admin|branch-employee')->group(function () {
+      Route::get('/dashboard/branch', [DashboardController::class, 'branch']);
    });
 
    Route::middleware('role:branch-delivery')->group(function () {
@@ -126,39 +150,12 @@ Route::middleware('auth:sanctum')->group(function () {
    //Other shared routes
    Route::get('/me', [AuthController::class, 'me']);
    Route::post('/logout', [AuthController::class, 'logout']);
-   Route::post('/change-password', [AuthController::class, 'changePassword']);
+   Route::post('/change-password', [AuthController::class, 'changePassword'])->middleware('throttle:10,1');
 
-   Route::apiResource('locations', LocationController::class);
-   Route::post('/locations/{id}/activate', [LocationController::class, 'actrivate']);
-   
    Route::get('/states', [StateController::class, 'index']);
-
-   Route::get('/manifests/eligible-shipments', [ManifestController::class, 'eligibleShipments']);
-   Route::post('/manifests/{manifest}/close', [ManifestController::class, 'close']);
-   Route::apiResource('manifests', ManifestController::class)->only(['index', 'show', 'store']);
-
-   Route::get('/dashboard/branch',     [DashboardController::class, 'branch']);
-   Route::get('/dashboard/warehouse',  [DashboardController::class, 'warehouse']);
-   Route::get('/dashboard/superadmin', [DashboardController::class, 'superadmin']);
 });
 
 // Public tracking endpoint - no authentication required
-Route::get('/track/{awb}', [ShipmentController::class, 'track']);
+Route::get('/track/{awb}', [ShipmentController::class, 'track'])->middleware('throttle:30,1');
 
-Route::get('/pincodes/check', [PincodeController::class, 'check']);
-
-// Route::get('/debug-my-roles', function () {
-//     $user = auth('sanctum')->user();
-
-//     if (!$user) {
-//         return response()->json(['error' => 'Not authenticated'], 401);
-//     }
-
-//     return response()->json([
-//         'user_id'     => $user->id,
-//         'email'       => $user->email,
-//         'roles'       => $user->getRoleNames(),
-//         'permissions' => $user->getAllPermissions()->pluck('name'),
-//         'has_super'   => $user->hasRole('super-admin'),
-//     ]);
-// });
+Route::get('/pincodes/check', [PincodeController::class, 'check'])->middleware('throttle:60,1');

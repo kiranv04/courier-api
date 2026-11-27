@@ -66,6 +66,8 @@ class ReportController extends Controller
 
     private function buildShipmentReport(Request $request): array
     {
+        $this->validateFilters($request, ['service_type' => 'nullable|in:Surface,Apex,Domestic Priority']);
+
         $user    = auth()->user();
         $isAdmin = $user->hasAnyRole(['super-admin', 'admin']);
 
@@ -116,6 +118,8 @@ class ReportController extends Controller
 
     private function buildInvoiceReport(Request $request): array
     {
+        $this->validateFilters($request);
+
         $user    = auth()->user();
         $isAdmin = $user->hasAnyRole(['super-admin', 'admin']);
 
@@ -245,6 +249,11 @@ class ReportController extends Controller
 
     public function shipmentsDetail(Request $request): JsonResponse
     {
+        $this->validateFilters($request, [
+            'status'       => 'nullable|in:draft,booked,picked_up,in_transit,at_hub,at_branch,out_for_delivery,delivered,exception,cancelled',
+            'service_type' => 'nullable|in:Surface,Apex,Domestic Priority',
+        ]);
+
         $user    = auth()->user();
         $isAdmin = $user->hasAnyRole(['super-admin', 'admin']);
 
@@ -286,6 +295,8 @@ class ReportController extends Controller
 
     public function invoicesDetail(Request $request): JsonResponse
     {
+        $this->validateFilters($request, ['type' => 'nullable|in:cash,corporate']);
+
         $user    = auth()->user();
         $isAdmin = $user->hasAnyRole(['super-admin', 'admin']);
 

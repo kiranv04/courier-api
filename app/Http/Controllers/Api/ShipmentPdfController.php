@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Helpers\AmountInWords;
 use App\Http\Controllers\Controller;
+use App\Models\BranchSetting;
 use App\Models\Invoice;
 use App\Models\Shipment;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -13,6 +14,8 @@ class ShipmentPdfController extends Controller
 {
     public function generate(Shipment $shipment): Response
     {
+        $this->authorizeShipment($shipment);
+
         // Load all required relations
         $shipment->load([
             'parcels',
@@ -27,8 +30,6 @@ class ShipmentPdfController extends Controller
 
         $invoice = Invoice::whereHas('shipments', fn($q) => $q->where('shipments.id', $shipment->id))
             ->first();
-
-            // print_r($invoice);
 
         // ── Branch state info ─────────────────────────────────────
         $branchState    = $shipment->branch?->location?->state;
@@ -66,13 +67,13 @@ class ShipmentPdfController extends Controller
             ->filter()
             ->implode('-'); // e.g. "29-Karnataka"
  
-        // ── Static VK GSTIN (replace once settings module is built) ──
-        $gstin = config('vk.gstin', '29XXXXXXXXXXXXX');
+        // ── Company/branch GSTIN (branch override, falling back to company default) ──
+        $gstin = $shipment->branch ? BranchSetting::gstinForBranch($shipment->branch) : null;
 
         // Resolve the effective print config
         $config = PrintConfigController::resolveForShipment($shipment);
 
-        $vkGstin = config('vk.gstin', '29XXXXXXXXXXXXX');
+        $vkGstin = $gstin;
 
         $pdf = Pdf::loadView('pdf.shipment', [
             'shipment'      => $shipment,

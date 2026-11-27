@@ -30,7 +30,7 @@ class DeliveryController extends Controller
             ->with([
                 'shipment' => fn($q) => $q->with([
                     'parcels:id,shipment_id,weight,num_boxes',
-                    'charges:id,shipment_id',
+                    'charges:id,shipment_id,grand_total',
                 ])
                 ->select(
                     'id', 'awb_number', 'status', 'service', 'service_type',
@@ -94,7 +94,7 @@ class DeliveryController extends Controller
             DB::rollBack();
             return response()->json([
                 'message' => 'Failed to update shipment',
-                'error'   => $e->getMessage(),
+                'error'   => $this->errorDetail($e),
             ], 500);
         }
     }
@@ -106,7 +106,7 @@ class DeliveryController extends Controller
         $assignment = ShipmentAssignment::where('shipment_id', $shipment->id)
             ->where('assigned_to', $user->id)
             ->where('assignment_type', 'delivery')
-            ->where('status', ['pending', 'failed'])
+            ->whereIn('status', ['pending', 'failed'])
             ->first();
 
         if (!$assignment) {
@@ -129,13 +129,13 @@ class DeliveryController extends Controller
                 'entity_type' => 'App\\Models\\User',
                 'entity_id'   => $user->id,
                 'notes'       => 'Failed delivery: ' . $data['reason'] .
-                                 ($data['notes'] ? ' — ' . $data['notes'] : ''),
+                                 (!empty($data['notes']) ? ' — ' . $data['notes'] : ''),
                 'created_by'  => $user->id,
             ]);
 
             $assignment->update([
                 'status' => 'failed',
-                'notes'  => $data['reason'] . ($data['notes'] ? ': ' . $data['notes'] : ''),
+                'notes'  => $data['reason'] . (!empty($data['notes']) ? ': ' . $data['notes'] : ''),
             ]);
 
             DB::commit();
@@ -146,7 +146,7 @@ class DeliveryController extends Controller
             DB::rollBack();
             return response()->json([
                 'message' => 'Failed to update shipment',
-                'error'   => $e->getMessage(),
+                'error'   => $this->errorDetail($e),
             ], 500);
         }
     }

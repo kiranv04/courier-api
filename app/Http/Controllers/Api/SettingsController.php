@@ -32,7 +32,7 @@ class SettingsController extends Controller
             'terms_conditions'      => 'nullable|string',
             'bank_account_name'     => 'nullable|string|max:255',
             'bank_account_number'   => 'nullable|string|max:50',
-            'bank_ifsc_code'        => 'nullable|string|max:20',
+            'bank_ifsc_code'        => ['nullable', 'regex:/^[A-Z]{4}0[A-Z0-9]{6}$/'],
             'bank_name'             => 'nullable|string|max:255',
             'bank_branch_name'      => 'nullable|string|max:255',
         ]);

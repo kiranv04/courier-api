@@ -38,6 +38,8 @@ class ShipmentStatusController extends Controller
 
     public function nextTransitions(Shipment $shipment): JsonResponse
     {
+        $this->authorizeShipment($shipment);
+
         $userRoles = auth()->user()->getRoleNames()->toArray();
         $allowed   = $this->transitions[$shipment->status] ?? [];
 
@@ -57,6 +59,12 @@ class ShipmentStatusController extends Controller
 
     public function update(Request $request, Shipment $shipment): JsonResponse
     {
+        $this->authorizeShipment($shipment);
+
+        $request->validate([
+            'status' => 'required|in:picked_up,in_transit,at_hub,at_branch,out_for_delivery,delivered,exception,cancelled',
+        ]);
+
         $user      = auth()->user();
         $userRoles = $user->getRoleNames()->toArray();
         $newStatus = $request->input('status');
@@ -132,7 +140,7 @@ class ShipmentStatusController extends Controller
             DB::rollBack();
             return response()->json([
                 'message' => 'Failed to update status',
-                'error'   => $e->getMessage(),
+                'error'   => $this->errorDetail($e),
             ], 500);
         }
     }
@@ -187,11 +195,27 @@ class ShipmentStatusController extends Controller
         $rules = match($status) {
             'in_transit', 'at_branch' => [
                 'destination_type' => 'required|in:App\\Models\\Branch,App\\Models\\Warehouse',
-                'destination_id'   => 'required|integer',
+                'destination_id'   => [
+                    'required', 'integer',
+                    function ($attribute, $value, $fail) use ($request) {
+                        $type  = $request->input('destination_type');
+                        $table = $type === 'App\Models\Warehouse' ? 'warehouses' : 'branches';
+                        if (!DB::table($table)->where('id', $value)->exists()) {
+                            $fail("The selected destination does not exist in {$table}.");
+                        }
+                    },
+                ],
                 'notes'            => 'nullable|string|max:500',
             ],
             'out_for_delivery' => [
-                'delivery_agent_id' => 'required|exists:users,id',
+                'delivery_agent_id' => [
+                    'required', 'exists:users,id',
+                    function ($attribute, $value, $fail) {
+                        if (!User::find($value)?->hasRole('branch-delivery')) {
+                            $fail('The selected delivery agent must have the branch-delivery role.');
+                        }
+                    },
+                ],
                 'notes'             => 'nullable|string|max:500',
             ],
             'exception', 'cancelled' => [

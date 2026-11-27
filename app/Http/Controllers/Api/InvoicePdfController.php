@@ -4,15 +4,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Helpers\AmountInWords;
 use App\Http\Controllers\Controller;
+use App\Models\BranchSetting;
+use App\Models\CompanySettings;
 use App\Models\Invoice;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Storage;
 
 class InvoicePdfController extends Controller
 {
     public function generate(Invoice $invoice): Response
     {
+        $this->authorizeInvoice($invoice);
+
         $invoice->load([
             'branch.location.state',
             'customer.addresses',
@@ -49,9 +54,15 @@ class InvoicePdfController extends Controller
         // ── Amount in words ───────────────────────────────────────
         $amountInWords = AmountInWords::convert($invoice->grand_total);
  
-        // ── Static VK GSTIN ───────────────────────────────────────
-        $vkGstin = config('vk.gstin', '29XXXXXXXXXXXX');
- 
+        // ── Company/branch GSTIN (branch override, falling back to company default) ──
+        $vkGstin = $invoice->branch ? BranchSetting::gstinForBranch($invoice->branch) : null;
+
+        // ── Company settings (letterhead, logo, terms, bank details) ──
+        $company = CompanySettings::current();
+        $logoAbsolutePath = $company->logo_path && Storage::disk('public')->exists($company->logo_path)
+            ? Storage::disk('public')->path($company->logo_path)
+            : null;
+
         $pdf = Pdf::loadView('pdf.corporate-invoice', [
             'vkInvoice'     => $invoice,
             'branchGstCode' => $branchGstCode,
@@ -59,6 +70,8 @@ class InvoicePdfController extends Controller
             'isIntraState'  => $isIntraState,
             'amountInWords' => $amountInWords,
             'vkGstin'       => $vkGstin,
+            'company'       => $company,
+            'logoPath'      => $logoAbsolutePath,
         ])->setPaper('a4', 'portrait');
  
         $filename = 'VK-CORP-' . $invoice->invoice_number . '.pdf';

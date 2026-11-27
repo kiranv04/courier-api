@@ -32,6 +32,8 @@ class PrintConfigController extends Controller
     // Get config for a customer — returns existing or defaults
     public function getForCustomer(Customer $customer): JsonResponse
     {
+        $this->authorizeCustomer($customer);
+
         $config = $customer->printConfig ?? self::defaults();
 
         return response()->json([
@@ -43,6 +45,8 @@ class PrintConfigController extends Controller
     // Create or update a customer's print config
     public function saveForCustomer(Request $request, Customer $customer): JsonResponse
     {
+        $this->authorizeCustomer($customer);
+
         $data = $this->validateConfig($request);
 
         $config = CustomerPrintConfig::updateOrCreate(
@@ -62,6 +66,8 @@ class PrintConfigController extends Controller
     // Reset a customer's config back to defaults
     public function resetForCustomer(Customer $customer): JsonResponse
     {
+        $this->authorizeCustomer($customer);
+
         $customer->printConfig?->delete();
 
         return response()->json([
@@ -73,6 +79,8 @@ class PrintConfigController extends Controller
     // Save a per-shipment override
     public function saveOverride(Request $request, Shipment $shipment): JsonResponse
     {
+        $this->authorizeShipment($shipment);
+
         $data = $this->validateConfig($request);
 
         $override = ShipmentPrintOverride::updateOrCreate(
@@ -95,7 +103,7 @@ class PrintConfigController extends Controller
         }
 
         // Priority 2: customer config (corporate only)
-        if ($shipment->customer_type === 'corporate' && $shipment->customer?->printConfig) {
+        if ($shipment->customer?->customer_type === 'corporate' && $shipment->customer?->printConfig) {
             return $shipment->customer->printConfig->toArray();
         }
 
@@ -121,12 +129,14 @@ class PrintConfigController extends Controller
 
     public function getEffectiveForShipment(Shipment $shipment): JsonResponse
     {
+        $this->authorizeShipment($shipment);
+
         $config = self::resolveForShipment($shipment);
 
         // Determine source for the frontend badge
         if ($shipment->printOverride) {
             $source = 'override';
-        } elseif ($shipment->customer_type === 'corporate' && $shipment->customer?->printConfig) {
+        } elseif ($shipment->customer?->customer_type === 'corporate' && $shipment->customer?->printConfig) {
             $source = 'customer';
         } else {
             $source = 'default';

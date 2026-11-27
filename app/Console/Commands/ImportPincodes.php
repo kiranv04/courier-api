@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\ServiceablePincode;
+use App\Models\State;
 use Illuminate\Console\Command;
 use OpenSpout\Reader\XLSX\Reader;
 use OpenSpout\Reader\XLSX\Options;
@@ -12,53 +13,56 @@ class ImportPincodes extends Command
     protected $signature   = 'pincodes:import';
     protected $description = 'Import serviceable pincodes from Excel files in database/data/';
 
-    private const STATE_MAP = [
-        'ANDAMAN & NICOBAR ISLANDS'                => 1,
-        'ANDAMAN AND NICOBAR ISLANDS'              => 1,
-        'ANDHRA PRADESH'                           => 2,
-        'ARUNACHAL PRADESH'                        => 3,
-        'ASSAM'                                    => 4,
-        'BIHAR'                                    => 5,
-        'CHANDIGARH'                               => 6,
-        'CHHATTISGARH'                             => 7,
-        'CHHATISGARH'                              => 7,
-        'DADRA AND NAGAR HAVELI'                   => 8,
-        'DADRA AND NAGAR HAVELI AND DAMAN & DIU'   => 8,
-        'DADRA AND NAGAR HAVELI AND DAMAN AND DIU' => 8,
-        'DELHI'                                    => 9,
-        'GOA'                                      => 10,
-        'GUJARAT'                                  => 11,
-        'HARYANA'                                  => 12,
-        'HIMACHAL PRADESH'                         => 13,
-        'JAMMU AND KASHMIR'                        => 14,
-        'JHARKHAND'                                => 15,
-        'KARNATAKA'                                => 16,
-        'KERALA'                                   => 17,
-        'LADAKH'                                   => 18,
-        'LEH LADHAK'                               => 18,
-        'LEH LADAKH'                               => 18,
-        'LAKSHADWEEP'                              => 19,
-        'MADHYA PRADESH'                           => 20,
-        'MAHARASHTRA'                              => 21,
-        'MANIPUR'                                  => 22,
-        'MEGHALAYA'                                => 23,
-        'MIZORAM'                                  => 24,
-        'NAGALAND'                                 => 25,
-        'ODISHA'                                   => 26,
-        'ORISSA'                                   => 26,
-        'PONDICHERRY'                              => 27,
-        'PUDUCHERRY'                               => 27,
-        'PUNJAB'                                   => 28,
-        'RAJASTHAN'                                => 29,
-        'SIKKIM'                                   => 30,
-        'TAMIL NADU'                               => 31,
-        'TAMILNADU'                                => 31,
-        'TELANGANA'                                => 32,
-        'TRIPURA'                                  => 33,
-        'UTTAR PRADESH'                            => 34,
-        'UTTARAKHAND'                              => 35,
-        'UTTARANCHAL'                              => 35,
-        'WEST BENGAL'                              => 36,
+    // Maps a spreadsheet spelling variant to the canonical name in the `states` table.
+    // IDs are resolved at runtime against the DB (see resolveStateIds()) rather than
+    // hardcoded here, so this stays correct regardless of seed/insert order.
+    private const STATE_NAME_MAP = [
+        'ANDAMAN & NICOBAR ISLANDS'                => 'Andaman and Nicobar Islands',
+        'ANDAMAN AND NICOBAR ISLANDS'              => 'Andaman and Nicobar Islands',
+        'ANDHRA PRADESH'                           => 'Andhra Pradesh',
+        'ARUNACHAL PRADESH'                        => 'Arunachal Pradesh',
+        'ASSAM'                                    => 'Assam',
+        'BIHAR'                                    => 'Bihar',
+        'CHANDIGARH'                               => 'Chandigarh',
+        'CHHATTISGARH'                             => 'Chhattisgarh',
+        'CHHATISGARH'                              => 'Chhattisgarh',
+        'DADRA AND NAGAR HAVELI'                   => 'Dadra and Nagar Haveli and Daman and Diu',
+        'DADRA AND NAGAR HAVELI AND DAMAN & DIU'   => 'Dadra and Nagar Haveli and Daman and Diu',
+        'DADRA AND NAGAR HAVELI AND DAMAN AND DIU' => 'Dadra and Nagar Haveli and Daman and Diu',
+        'DELHI'                                    => 'Delhi',
+        'GOA'                                      => 'Goa',
+        'GUJARAT'                                  => 'Gujarat',
+        'HARYANA'                                  => 'Haryana',
+        'HIMACHAL PRADESH'                         => 'Himachal Pradesh',
+        'JAMMU AND KASHMIR'                        => 'Jammu and Kashmir',
+        'JHARKHAND'                                => 'Jharkhand',
+        'KARNATAKA'                                => 'Karnataka',
+        'KERALA'                                   => 'Kerala',
+        'LADAKH'                                   => 'Ladakh',
+        'LEH LADHAK'                               => 'Ladakh',
+        'LEH LADAKH'                               => 'Ladakh',
+        'LAKSHADWEEP'                              => 'Lakshadweep',
+        'MADHYA PRADESH'                           => 'Madhya Pradesh',
+        'MAHARASHTRA'                              => 'Maharashtra',
+        'MANIPUR'                                  => 'Manipur',
+        'MEGHALAYA'                                => 'Meghalaya',
+        'MIZORAM'                                  => 'Mizoram',
+        'NAGALAND'                                 => 'Nagaland',
+        'ODISHA'                                   => 'Odisha',
+        'ORISSA'                                   => 'Odisha',
+        'PONDICHERRY'                              => 'Puducherry',
+        'PUDUCHERRY'                               => 'Puducherry',
+        'PUNJAB'                                   => 'Punjab',
+        'RAJASTHAN'                                => 'Rajasthan',
+        'SIKKIM'                                   => 'Sikkim',
+        'TAMIL NADU'                               => 'Tamil Nadu',
+        'TAMILNADU'                                => 'Tamil Nadu',
+        'TELANGANA'                                => 'Telangana',
+        'TRIPURA'                                  => 'Tripura',
+        'UTTAR PRADESH'                            => 'Uttar Pradesh',
+        'UTTARAKHAND'                              => 'Uttarakhand',
+        'UTTARANCHAL'                              => 'Uttarakhand',
+        'WEST BENGAL'                              => 'West Bengal',
     ];
 
     private const SERVICE_MAP = [
@@ -88,6 +92,21 @@ class ImportPincodes extends Command
         ],
     ];
 
+    /**
+     * Resolve canonical state name => id from the `states` table, keyed case-insensitively
+     * so lookups are resilient to minor casing differences.
+     *
+     * @return array<string, int>
+     */
+    private function resolveStateIds(): array
+    {
+        $ids = [];
+        foreach (State::pluck('id', 'name') as $name => $id) {
+            $ids[strtoupper($name)] = $id;
+        }
+        return $ids;
+    }
+
     public function handle(): int
     {
         $dataPath = database_path('data');
@@ -98,6 +117,8 @@ class ImportPincodes extends Command
                 return self::FAILURE;
             }
         }
+
+        $stateIds = $this->resolveStateIds();
 
         $this->info('Starting pincode import...');
 
@@ -142,8 +163,9 @@ class ImportPincodes extends Command
                         continue;
                     }
 
-                    $stateRaw = strtoupper((string) $get('CSTATE'));
-                    $stateId  = self::STATE_MAP[$stateRaw] ?? null;
+                    $stateRaw       = strtoupper((string) $get('CSTATE'));
+                    $stateName      = self::STATE_NAME_MAP[$stateRaw] ?? null;
+                    $stateId        = $stateName !== null ? ($stateIds[strtoupper($stateName)] ?? null) : null;
 
                     if ($stateId === null && $stateRaw !== '') {
                         $unmappedStates[$stateRaw] = true;

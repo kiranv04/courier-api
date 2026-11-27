@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Shipment;
+use App\Models\State;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,8 @@ class InvoiceController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $this->validateFilters($request, ['type' => 'nullable|in:cash,corporate']);
+
         $query = Invoice::with(['branch', 'customer', 'shipments', 'createdBy'])
             ->withCount('shipments')
             ->orderByDesc('created_at');
@@ -27,7 +30,10 @@ class InvoiceController extends Controller
         //     $query->where('status', $request->status);
         // }
 
-        if ($request->filled('branch_id')) {
+        if (! $this->isHeadOffice()) {
+            // Non head-office users only ever see their own branch's invoices
+            $query->where('branch_id', auth()->user()->owner_id);
+        } elseif ($request->filled('branch_id')) {
             $query->where('branch_id', $request->branch_id);
         }
 
@@ -50,6 +56,8 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice): JsonResponse
     {
+        $this->authorizeInvoice($invoice);
+
         $invoice->load([
             'branch',
             'customer',
@@ -61,84 +69,6 @@ class InvoiceController extends Controller
         return response()->json(['data' => $invoice]);
     }
 
-    // ── Create cash invoice ─────────────────────────────────────
-    //
-    // Called automatically when a shipment moves out of draft/booked
-    // (i.e. when it is picked up). Can also be called manually.
-
-    public function createCash(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'shipment_id' => 'required|exists:shipments,id',
-        ]);
-
-        $shipment = Shipment::with([
-            'charges',
-            'branch.location.state',
-        ])->findOrFail($data['shipment_id']);
-
-        // Guard: must not already have an invoice
-        $existing = Invoice::whereHas('shipments', fn($q) => $q->where('shipments.id', $shipment->id))
-            ->first();
-
-        if ($existing) {
-            return response()->json([
-                'message' => 'An invoice already exists for this shipment.',
-                'data'    => $existing,
-            ], 409);
-        }
-
-        // Guard: shipment must be past draft
-        if ($shipment->status === 'draft') {
-            return response()->json([
-                'message' => 'Cannot invoice a draft shipment.',
-            ], 422);
-        }
-
-        if (!$shipment->charges) {
-            return response()->json([
-                'message' => 'Shipment has no charge record.',
-            ], 422);
-        }
-
-        $isIntraState = $this->resolveIntraState($shipment);
-
-        try {
-            DB::beginTransaction();
-
-            $invoice = new Invoice([
-                'invoice_number' => Invoice::generateInvoiceNumber(),
-                'type'           => 'cash',
-                'branch_id'      => $shipment->branch_id,
-                'customer_id'    => $shipment->customer_id,
-                'status'         => 'finalized',
-                'created_by'     => auth()->id(),
-            ]);
-
-            $invoice->computeTotalsFromCharges(
-                collect([$shipment->charges]),
-                $isIntraState
-            );
-
-            $invoice->save();
-            $invoice->shipments()->attach($shipment->id);
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Cash invoice created successfully.',
-                'data'    => $invoice->load('shipments'),
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'message' => 'Failed to create invoice.',
-                'error'   => $e->getMessage(),
-            ], 500);
-        }
-    }
-
     // ── Preview corporate invoice (before saving) ───────────────
     //
     // Admin selects customer + date range → system returns all
@@ -148,7 +78,7 @@ class InvoiceController extends Controller
     {
         $data = $request->validate([
             'customer_id' => 'required|exists:customers,id',
-            'branch_id'   => 'required|exists:branches,id',
+            'branch_id'   => ['required', 'exists:branches,id', $this->ownBranchRule()],
             'from_date'   => 'required|date',
             'to_date'     => 'required|date|after_or_equal:from_date',
         ]);
@@ -171,7 +101,7 @@ class InvoiceController extends Controller
         $charges      = $shipments->pluck('charges')->filter();
         $isIntraState = $this->resolveIntraStateFromBranch(
             $shipments->first()->branch,
-            $shipments->first()->consignee_state
+            $shipments->first()->consignee_state_id
         );
 
         $summary = $this->buildSummary($charges, $isIntraState);
@@ -188,11 +118,11 @@ class InvoiceController extends Controller
     {
         $data = $request->validate([
             'customer_id'  => 'required|exists:customers,id',
-            'branch_id'    => 'required|exists:branches,id',
+            'branch_id'    => ['required', 'exists:branches,id', $this->ownBranchRule()],
             'from_date'    => 'required|date',
             'to_date'      => 'required|date|after_or_equal:from_date',
             'shipment_ids' => 'required|array|min:1',
-            'shipment_ids.*' => 'integer|exists:shipments,id',
+            'shipment_ids.*' => 'integer|distinct|exists:shipments,id',
         ]);
 
         // Verify all selected shipments belong to this customer/branch and are uninvoiced
@@ -200,7 +130,10 @@ class InvoiceController extends Controller
             ->whereIn('id', $data['shipment_ids'])
             ->where('customer_id', $data['customer_id'])
             ->where('branch_id', $data['branch_id'])
-            // ->whereDoesntHave('invoices')
+            ->whereNotIn('status', ['draft', 'cancelled'])
+            ->whereDoesntHave('invoices')
+            ->whereDate('booked_at', '>=', $data['from_date'])
+            ->whereDate('booked_at', '<=', $data['to_date'])
             ->get();
 
         if ($shipments->count() !== count($data['shipment_ids'])) {
@@ -241,12 +174,25 @@ class InvoiceController extends Controller
             DB::rollBack();
             return response()->json([
                 'message' => 'Failed to create corporate invoice.',
-                'error'   => $e->getMessage(),
+                'error'   => $this->errorDetail($e),
             ], 500);
         }
     }
 
     // ── Private helpers ─────────────────────────────────────────
+
+    /**
+     * Non-admin callers may only invoice their own branch.
+     */
+    private function ownBranchRule(): \Closure
+    {
+        return function ($attribute, $value, $fail) {
+            $user = auth()->user();
+            if (!$user->hasAnyRole(['super-admin', 'admin']) && (int) $value !== (int) $user->owner_id) {
+                $fail('You may only create invoices for your own branch.');
+            }
+        };
+    }
 
     /**
      * Fetch shipments for a customer/branch/date range that are not yet invoiced.
@@ -270,12 +216,14 @@ class InvoiceController extends Controller
 
     /**
      * Determine intra-state from a shipment's branch location vs consignee state.
-     * Branch → location → state → gst_code compared to consignee_state (stored as state name).
+     * Branch → location → state → gst_code compared to consignee_state_id (FK → states.id).
      */
     private function resolveIntraState(Shipment $shipment): bool
     {
         $branchStateName    = $shipment->branch?->location?->state?->name;
-        $consigneeStateName = $shipment->consignee_state;
+        $consigneeStateName = $shipment->consignee_state_id
+            ? State::find($shipment->consignee_state_id)?->name
+            : null;
 
         if (!$branchStateName || !$consigneeStateName) {
             return false;
@@ -284,15 +232,18 @@ class InvoiceController extends Controller
         return strtolower(trim($branchStateName)) === strtolower(trim($consigneeStateName));
     }
 
-    private function resolveIntraStateFromBranch($branch, ?string $consigneeState): bool
+    private function resolveIntraStateFromBranch($branch, ?int $consigneeStateId): bool
     {
-        $branchStateName = $branch?->location?->state?->name;
+        $branchStateName    = $branch?->location?->state?->name;
+        $consigneeStateName = $consigneeStateId
+            ? State::find($consigneeStateId)?->name
+            : null;
 
-        if (!$branchStateName || !$consigneeState) {
+        if (!$branchStateName || !$consigneeStateName) {
             return false;
         }
 
-        return strtolower(trim($branchStateName)) === strtolower(trim($consigneeState));
+        return strtolower(trim($branchStateName)) === strtolower(trim($consigneeStateName));
     }
 
     /**

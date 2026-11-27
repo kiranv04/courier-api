@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class Customer extends Model
 {
     use HasFactory;
 
     protected $fillable = [
+        'branch_id',
         'company_name',
         'customer_code',
         'customer_type',
@@ -39,15 +41,26 @@ class Customer extends Model
         return $this->hasMany(CustomerAddress::class);
     }
 
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
     public static function generateCustomerCode(): string
     {
-        // Get the highest existing number
-        $last = self::orderBy('id', 'desc')
-            ->first();
+        return DB::transaction(function () {
+            $lastCode = self::where('customer_code', 'like', 'CUST-%')
+                ->lockForUpdate()
+                ->orderByDesc('id')
+                ->value('customer_code');
 
-        $nextNumber = $last ? ((int) substr($last->customer_code, 5)) + 1 : 1;
+            $nextNumber = 1;
+            if ($lastCode && preg_match('/(\d+)$/', $lastCode, $matches)) {
+                $nextNumber = (int) $matches[1] + 1;
+            }
 
-        return sprintf('CUST-%06d', $nextNumber);
+            return sprintf('CUST-%06d', $nextNumber);
+        });
     }
 
     public function printConfig()

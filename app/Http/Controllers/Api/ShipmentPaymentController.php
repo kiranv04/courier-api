@@ -16,6 +16,8 @@ class ShipmentPaymentController extends Controller
      */
     public function show(Shipment $shipment): JsonResponse
     {
+        $this->authorizeShipment($shipment);
+
         return response()->json([
             'data' => $shipment->payment()->with('collectedBy:id,name')->first(),
         ]);
@@ -27,6 +29,8 @@ class ShipmentPaymentController extends Controller
      */
     public function store(Request $request, Shipment $shipment): JsonResponse
     {
+        $this->authorizeShipment($shipment);
+
         $data = $request->validate([
             'payment_type'   => 'required|in:cash,neft,upi,cheque,dd,other',
             'transaction_id' => 'required_if:payment_type,neft,upi|nullable|string|max:100',
@@ -41,7 +45,7 @@ class ShipmentPaymentController extends Controller
                 ['shipment_id' => $shipment->id],
                 [
                     'payment_type'   => $data['payment_type'],
-                    'transaction_id' => $data['payment_type'] === 'cash' ? null : $data['transaction_id'],
+                    'transaction_id' => $data['payment_type'] === 'cash' ? null : ($data['transaction_id'] ?? null),
                     'amount'         => $data['amount'],
                     'collected_by'   => auth()->id(),
                     'collected_at'   => now(),
@@ -70,7 +74,7 @@ class ShipmentPaymentController extends Controller
             DB::rollBack();
             return response()->json([
                 'message' => 'Failed to record payment',
-                'error'   => $e->getMessage(),
+                'error'   => $this->errorDetail($e),
             ], 500);
         }
     }

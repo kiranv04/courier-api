@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Shipment extends Model
 {
     protected $fillable = [
-        'awb_number', 'branch_id', 'customer_id', 'customer_type',
+        'awb_number', 'branch_id', 'customer_id',
         'status', 'service_type', 'service', 'payment_mode',
         'shipper_name', 'shipper_company_name', 'shipper_phone', 'shipper_email',
         'shipper_gst', 'shipper_address_line1', 'shipper_address_line2',
@@ -15,16 +15,62 @@ class Shipment extends Model
         'consignee_name', 'receiver_name', 'consignee_phone', 'consignee_gst',
         'consignee_address_line1', 'consignee_address_line2', 'consignee_pincode', 'consignee_city', 'consignee_state_id',
         'customer_reference', 'parcel_content', 'tracking_number', 'special_instructions',
-        'in_favour_of', 'payable_at', 'collectable_amount',
-        'created_by', 'booked_at',
+        'in_favor_of', 'payable_at', 'collectable_amount',
+        'created_by', 'booked_at', 'delivered_at',
     ];
 
     protected $casts = [
         'collectable_amount' => 'decimal:2',
         'booked_at' => 'datetime',
+        'delivered_at' => 'datetime',
     ];
 
     // Auto-generate AWB on creation
+    /**
+     * Shipments a user may see: head office sees all; a branch/warehouse user sees
+     * shipments booked at, or that have passed through / been routed to, their location;
+     * a delivery agent sees shipments assigned to them.
+     */
+    public function scopeVisibleTo($query, User $user)
+    {
+        if ($user->hasAnyRole(['super-admin', 'admin'])) {
+            return $query;
+        }
+
+        $isBranch    = $user->hasAnyRole(['branch-admin', 'branch-employee']);
+        $isWarehouse = $user->hasAnyRole(['warehouse-admin', 'warehouse-employee']);
+        $isDelivery  = $user->hasRole('branch-delivery');
+
+        if (! ($isBranch || $isWarehouse || $isDelivery) || (! $isDelivery && ! $user->owner_id)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $locType = $isWarehouse ? Warehouse::class : Branch::class;
+        $locId   = $user->owner_id;
+
+        return $query->where(function ($q) use ($isBranch, $isDelivery, $user, $locType, $locId) {
+            // Always-false seed so every branch below can safely be an OR.
+            $q->whereRaw('1 = 0');
+
+            if ($isBranch) {
+                $q->orWhere('shipments.branch_id', $locId);
+            }
+            if ($isDelivery) {
+                $q->orWhereHas('assignments', fn ($a) => $a->where('assigned_to', $user->id));
+            } else {
+                $q->orWhereHas('events', fn ($e) => $e->where(fn ($w) => $w
+                        ->where('entity_type', $locType)->where('entity_id', $locId))
+                    ->orWhere(fn ($w) => $w
+                        ->where('destination_type', $locType)->where('destination_id', $locId)));
+            }
+        });
+    }
+
+    public function isVisibleTo(User $user): bool
+    {
+        return static::query()->visibleTo($user)->whereKey($this->getKey())->exists();
+    }
+
     protected static function booted(): void
     {
         static::creating(function (Shipment $shipment) {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Shipment;
 use App\Models\ShipmentEvent;
+use App\Models\State;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use Illuminate\Http\Request;
@@ -17,14 +18,14 @@ class ShipmentController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $this->validateFilters($request, ['status' => 'nullable|in:draft,booked,picked_up,in_transit,at_hub,at_branch,out_for_delivery,delivered,exception,cancelled']);
+
         $user = auth()->user();
-        $isBranchAdmin = $user->hasRole('branch-admin');
- 
+
         $shipments = Shipment::with(['charges', 'latestEvent', 'branch', 'customer', 'payment'])
-            // Branch admins are always scoped to their branch
-            ->when($isBranchAdmin, fn($q) => $q->where('branch_id', $user->owner_id))
-            // Admin optional branch filter
-            ->when(!$isBranchAdmin && $request->branch_id, fn($q) => $q->where('branch_id', $request->branch_id))
+            // Non head-office users only see shipments that touch their location
+            ->visibleTo($user)
+            ->when($request->branch_id, fn($q) => $q->where('branch_id', $request->branch_id))
             // Date range — only apply if both dates are provided
             ->when($request->date_from && $request->date_to, fn($q) => $q
                 ->whereDate('created_at', '>=', $request->date_from)
@@ -42,95 +43,97 @@ class ShipmentController extends Controller
      */
     public function store(Request $request)
     {
+        $this->denyWarehouseRoles();
+
         $data = $request->validate([
             'status'                  => 'required|in:draft,booked',
             'branchId' => [
                 auth()->user()->hasAnyRole(['super-admin', 'admin']) ? 'required' : 'nullable',
                 'exists:branches,id'
             ],
-            'customer.customerId'     => 'nullable|exists:customers,id',
+            'customer.customerId'     => ['nullable', 'exists:customers,id', $this->ownCustomerRule()],
             'customer.customerType'   => 'required|in:cash,corporate',
-            'service.serviceType'     => 'nullable|string',
+            'service.serviceType'     => 'nullable|in:Surface,Apex,Domestic Priority',
             'service.service'         => 'required|in:Parcel,Document',
             'service.paymentMode'     => 'nullable|in:Regular,FOD,DOD,COD',
-            'service.customerRef'     => 'nullable|string',
-            'service.parcelContent'   => 'nullable|string',
-            'service.trackingNumber'  => 'nullable|string',
-            'specialInstruction'      => 'nullable|string',
+            'service.customerRef'     => 'nullable|string|max:255',
+            'service.parcelContent'   => 'nullable|string|max:255',
+            'service.trackingNumber'  => 'nullable|string|max:255|unique:shipments,awb_number',
+            'specialInstruction'      => 'nullable|string|max:255',
 
             // Shipper
-            'shipper.shipperName'           => 'required|string',
-            'shipper.shipperCompany'        => 'nullable|string',
-            'shipper.shipperPhone'          => 'nullable|string',
-            'shipper.shipperEmail'          => 'nullable|email',
-            'shipper.shipperGst'            => 'nullable|string',
-            'shipper.shipperAddLine1'       => 'nullable|string',
-            'shipper.shipperAddLine2'       => 'nullable|string',
-            'shipper.shipperAddCity'        => 'nullable|string',
-            'shipper.shipperState'          => 'nullable|string',
-            'shipper.shipperPincode'        => 'nullable|string',
+            'shipper.shipperName'           => 'required|string|max:255',
+            'shipper.shipperCompany'        => 'nullable|string|max:255',
+            'shipper.shipperPhone'          => 'nullable|regex:/^[6-9]\d{9}$/',
+            'shipper.shipperEmail'          => 'nullable|email|max:255',
+            'shipper.shipperGst'            => 'nullable|regex:/^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z]Z[0-9A-Za-z]$/',
+            'shipper.shipperAddLine1'       => 'nullable|string|max:255',
+            'shipper.shipperAddLine2'       => 'nullable|string|max:255',
+            'shipper.shipperAddCity'        => 'nullable|string|max:255',
+            'shipper.shipperState'          => 'nullable|exists:states,id',
+            'shipper.shipperPincode'        => 'nullable|digits:6',
 
             // Consignee
-            'consignee.consigneeName'       => 'required|string',
-            'consignee.receiverName'        => 'required|string',
-            'consignee.consigneePhone'      => 'nullable|string',
-            'consignee.consigneeGst'        => 'nullable|string',
-            'consignee.consigneeAddLine1'   => 'nullable|string',
-            'consignee.consigneeAddLine2'   => 'nullable|string',
-            'consignee.consigneeAddCity'    => 'nullable|string',
-            'consignee.consigneePincode'    => 'nullable|string',
-            'consignee.consigneeState'      => 'nullable|string',
+            'consignee.consigneeName'       => 'required|string|max:255',
+            'consignee.receiverName'        => 'required|string|max:255',
+            'consignee.consigneePhone'      => 'nullable|regex:/^[6-9]\d{9}$/',
+            'consignee.consigneeGst'        => 'nullable|regex:/^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z]Z[0-9A-Za-z]$/',
+            'consignee.consigneeAddLine1'   => 'nullable|string|max:255',
+            'consignee.consigneeAddLine2'   => 'nullable|string|max:255',
+            'consignee.consigneeAddCity'    => 'nullable|string|max:255',
+            'consignee.consigneePincode'    => 'nullable|digits:6',
+            'consignee.consigneeState'      => 'nullable|exists:states,id',
 
             // COD/DOD
-            'inFavour'            => 'nullable|string',
-            'payableAt'              => 'nullable|string',
-            'collectableAmount'      => 'nullable|numeric',
+            'dodCodDetails.inFavour'         => 'required_if:service.paymentMode,DOD,COD|nullable|string|max:255',
+            'dodCodDetails.payableAt'        => 'required_if:service.paymentMode,DOD,COD|nullable|string|max:255',
+            'dodCodDetails.collectableAmount' => 'required_if:service.paymentMode,DOD,COD|nullable|numeric|min:0.01|max:99999999.99',
 
             // Parcels
             'parcels'               => 'required_if:service.service,Parcel|nullable|array',
-            'parcels.*.length'      => 'required_if:service.service,Parcel|numeric',
-            'parcels.*.width'       => 'required_if:service.service,Parcel|numeric',
-            'parcels.*.height'      => 'required_if:service.service,Parcel|numeric',
-            'parcels.*.weight'      => 'required_if:service.service,Parcel|numeric',
-            'parcels.*.numBoxes'    => 'required_if:service.service,Parcel|integer|min:1',
-            'parcels.*.volWeight'   => 'required_if:service.service,Parcel|numeric',
+            'parcels.*.length'      => 'required_if:service.service,Parcel|numeric|min:0.01|max:99999999.99',
+            'parcels.*.width'       => 'required_if:service.service,Parcel|numeric|min:0.01|max:99999999.99',
+            'parcels.*.height'      => 'required_if:service.service,Parcel|numeric|min:0.01|max:99999999.99',
+            'parcels.*.weight'      => 'required_if:service.service,Parcel|numeric|min:0.01|max:99999999.99',
+            'parcels.*.numBoxes'    => 'required_if:service.service,Parcel|integer|min:1|max:127',
+            'parcels.*.volWeight'   => 'required_if:service.service,Parcel|numeric|min:0|max:99999999.99',
 
             // Invoices - only required for Parcel service
             'invoices'                      => 'required_if:service.service,Parcel|nullable|array',
-            'invoices.*.invoiceNumber'      => 'required_if:service.service,Parcel|string',
-            'invoices.*.invoiceAmount'      => 'required_if:service.service,Parcel|numeric',
-            'invoices.*.ewayBill'           => 'nullable|string',
+            'invoices.*.invoiceNumber'      => 'required_if:service.service,Parcel|string|max:255',
+            'invoices.*.invoiceAmount'      => 'required_if:service.service,Parcel|numeric|min:0|max:99999999.99',
+            'invoices.*.ewayBill'           => 'nullable|string|max:255',
 
             // Doc dimensions - only required for Document service
-            'docDimensions.length'  => 'required_if:service.service,Document|numeric',
-            'docDimensions.width'   => 'required_if:service.service,Document|numeric',
-            'docDimensions.height'  => 'required_if:service.service,Document|numeric',
-            'docDimensions.weight'  => 'required_if:service.service,Document|numeric',
-            'docDimensions.volWeight'  => 'nullable|numeric',
+            'docDimensions.length'  => 'required_if:service.service,Document|numeric|min:0.01|max:99999999.99',
+            'docDimensions.width'   => 'required_if:service.service,Document|numeric|min:0.01|max:99999999.99',
+            'docDimensions.height'  => 'required_if:service.service,Document|numeric|min:0.01|max:99999999.99',
+            'docDimensions.weight'  => 'required_if:service.service,Document|numeric|min:0.01|max:99999999.99',
+            'docDimensions.volWeight'  => 'nullable|numeric|min:0|max:99999999.99',
 
             // Rates
             'rates'                         => 'nullable|array',
-            'rates.cft'                     => 'nullable|decimal:0,2',
-            'rates.chargeableWeight'        => 'nullable|numeric',
-            'rates.packageYield'            => 'nullable|numeric',
-            'rates.freight'                 => 'nullable|numeric',
-            'rates.fuel'                    => 'nullable|numeric',
-            'rates.awbFee'                  => 'nullable|numeric',
-            'rates.fov'                     => 'nullable|numeric',
+            'rates.cft'                     => 'nullable|decimal:0,2|min:0|max:99999999.99',
+            'rates.chargeableWeight'        => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.packageYield'            => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.freight'                 => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.fuel'                    => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.awbFee'                  => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.fov'                     => 'nullable|numeric|min:0|max:99999999.99',
             'rates.insurance'               => 'nullable|in:owner,carrier',
-            'rates.carrierInsurance'        => 'nullable|numeric',
-            'rates.fod'                     => 'nullable|numeric',
-            'rates.dod'                     => 'nullable|numeric',
-            'rates.oda'                     => 'nullable|numeric',
-            'rates.handling'                => 'nullable|numeric',
-            'rates.dcc'                     => 'nullable|numeric',
-            'rates.pickupcharges'           => 'nullable|numeric',
-            'rates.deliverycharges'         => 'nullable|numeric',
-            'rates.otherCharges'            => 'nullable|numeric',
-            'rates.premiumCharges'          => 'nullable|numeric',
-            'rates.total'                   => 'nullable|numeric',
-            'rates.gst'                     => 'nullable|numeric',
-            'rates.grandTotal'              => 'nullable|numeric',
+            'rates.carrierInsurance'        => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.fod'                     => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.dod'                     => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.oda'                     => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.handling'                => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.dcc'                     => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.pickupcharges'           => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.deliverycharges'         => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.otherCharges'            => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.premiumCharges'          => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.total'                   => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.gst'                     => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.grandTotal'              => 'nullable|numeric|min:0|max:99999999.99',
         ]);
 
         $clean = fn($val) => ($val === '' || $val === null) ? null : $val;
@@ -152,9 +155,9 @@ class ShipmentController extends Controller
                 'awb_number'            => $s['trackingNumber'] ?? null,
                 // 'customer_type'         => $cust['customerType'],
                 'status'                => $data['status'],
-                'service_type'          => $s['serviceType'] ?? null,
+                'service_type'          => $s['serviceType'] ?? 'Surface',
                 'service'               => $s['service'],
-                'payment_mode'          => $s['paymentMode'] ?? null,
+                'payment_mode'          => $s['paymentMode'] ?? 'Regular',
                 'customer_reference'    => $s['customerRef'] ?? null,
                 'parcel_content'        => $s['parcelContent'] ?? null,
 
@@ -294,7 +297,7 @@ class ShipmentController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Failed to save shipment', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Failed to save shipment', 'error' => $this->errorDetail($e)], 500);
         }
     }
 
@@ -303,6 +306,8 @@ class ShipmentController extends Controller
      */
     public function show(Shipment $shipment)
     {
+        $this->authorizeShipment($shipment);
+
         return response()->json([
             'data' => $shipment->load(['parcels', 'shipmentInvoices', 'charges', 'events.entity', 'events.createdBy', 'assignments.assignedTo', 'customer']),
         ]);
@@ -313,6 +318,9 @@ class ShipmentController extends Controller
      */
     public function update(Request $request, Shipment $shipment)
     {
+        $this->denyWarehouseRoles();
+        $this->authorizeShipment($shipment);
+
         if (!in_array($shipment->status, ['draft', 'booked'])) {
             return response()->json(['message' => 'Only draft or booked shipments can be edited'], 403);
         }
@@ -323,73 +331,87 @@ class ShipmentController extends Controller
                 auth()->user()->hasAnyRole(['super-admin', 'admin']) ? 'required' : 'nullable',
                 'exists:branches,id'
             ],
-            'customer.customerId'     => 'nullable|exists:customers,id',
+            'customer.customerId'     => ['nullable', 'exists:customers,id', $this->ownCustomerRule()],
             'customer.customerType'   => 'required|in:cash,corporate',
-            'service.serviceType'     => 'nullable|string',
+            'service.serviceType'     => 'nullable|in:Surface,Apex,Domestic Priority',
             'service.service'         => 'required|in:Parcel,Document',
             'service.paymentMode'     => 'nullable|in:Regular,FOD,DOD,COD',
-            'service.customerRef'     => 'nullable|string',
-            'service.parcelContent'   => 'nullable|string',
-            'service.trackingNumber'  => 'nullable|string',
-            'specialInstruction'      => 'nullable|string',
+            'service.customerRef'     => 'nullable|string|max:255',
+            'service.parcelContent'   => 'nullable|string|max:255',
+            'service.trackingNumber'  => ['nullable', 'string', 'max:255', \Illuminate\Validation\Rule::unique('shipments', 'awb_number')->ignore($shipment->id)],
+            'specialInstruction'      => 'nullable|string|max:255',
 
-            'shipper.shipperName'           => 'required|string',
-            'shipper.shipperCompany'        => 'nullable|string',
-            'shipper.shipperPhone'          => 'nullable|string',
-            'shipper.shipperEmail'          => 'nullable|email',
-            'shipper.shipperGst'            => 'nullable|string',
-            'shipper.shipperAddLine1'       => 'nullable|string',
-            'shipper.shipperAddLine2'       => 'nullable|string',
-            'shipper.shipperAddCity'        => 'nullable|string',
-            'shipper.shipperState'          => 'nullable|string',
-            'shipper.shipperPincode'        => 'nullable|string',
+            'shipper.shipperName'           => 'required|string|max:255',
+            'shipper.shipperCompany'        => 'nullable|string|max:255',
+            'shipper.shipperPhone'          => 'nullable|regex:/^[6-9]\d{9}$/',
+            'shipper.shipperEmail'          => 'nullable|email|max:255',
+            'shipper.shipperGst'            => 'nullable|regex:/^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z]Z[0-9A-Za-z]$/',
+            'shipper.shipperAddLine1'       => 'nullable|string|max:255',
+            'shipper.shipperAddLine2'       => 'nullable|string|max:255',
+            'shipper.shipperAddCity'        => 'nullable|string|max:255',
+            'shipper.shipperState'          => 'nullable|exists:states,id',
+            'shipper.shipperPincode'        => 'nullable|digits:6',
 
-            'consignee.consigneeName'       => 'required|string',
-            'consignee.consigneePhone'      => 'nullable|string',
-            'consignee.consigneeGst'        => 'nullable|string',
-            'consignee.consigneeAddLine1'   => 'nullable|string',
-            'consignee.consigneeAddLine2'   => 'nullable|string',
-            'consignee.consigneeAddCity'    => 'nullable|string',
-            'consignee.consigneePincode'    => 'nullable|string',
+            'consignee.consigneeName'       => 'required|string|max:255',
+            'consignee.receiverName'        => 'required|string|max:255',
+            'consignee.consigneePhone'      => 'nullable|regex:/^[6-9]\d{9}$/',
+            'consignee.consigneeGst'        => 'nullable|regex:/^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z]Z[0-9A-Za-z]$/',
+            'consignee.consigneeAddLine1'   => 'nullable|string|max:255',
+            'consignee.consigneeAddLine2'   => 'nullable|string|max:255',
+            'consignee.consigneeAddCity'    => 'nullable|string|max:255',
+            'consignee.consigneePincode'    => 'nullable|digits:6',
+            'consignee.consigneeState'      => 'nullable|exists:states,id',
 
-            'parcels'               => 'nullable|array',
-            'parcels.*.length'      => 'required_if:service.service,Parcel|numeric',
-            'parcels.*.width'       => 'required_if:service.service,Parcel|numeric',
-            'parcels.*.height'      => 'required_if:service.service,Parcel|numeric',
-            'parcels.*.weight'      => 'required_if:service.service,Parcel|numeric',
-            'parcels.*.numBoxes'    => 'required_if:service.service,Parcel|integer|min:1',
+            'dodCodDetails.inFavour'         => 'required_if:service.paymentMode,DOD,COD|nullable|string|max:255',
+            'dodCodDetails.payableAt'        => 'required_if:service.paymentMode,DOD,COD|nullable|string|max:255',
+            'dodCodDetails.collectableAmount' => 'required_if:service.paymentMode,DOD,COD|nullable|numeric|min:0.01|max:99999999.99',
 
-            'invoices'                      => 'nullable|array',
-            'invoices.*.invoiceNumber'      => 'required_if:service.service,Parcel|string',
-            'invoices.*.invoiceAmount'      => 'required_if:service.service,Parcel|numeric',
-            'invoices.*.ewayBill'           => 'nullable|string',
+            'parcels'               => 'required_if:service.service,Parcel|nullable|array|min:1',
+            'parcels.*.length'      => 'required_if:service.service,Parcel|numeric|min:0.01|max:99999999.99',
+            'parcels.*.width'       => 'required_if:service.service,Parcel|numeric|min:0.01|max:99999999.99',
+            'parcels.*.height'      => 'required_if:service.service,Parcel|numeric|min:0.01|max:99999999.99',
+            'parcels.*.weight'      => 'required_if:service.service,Parcel|numeric|min:0.01|max:99999999.99',
+            'parcels.*.numBoxes'    => 'required_if:service.service,Parcel|integer|min:1|max:127',
+            'parcels.*.volWeight'   => 'nullable|numeric|min:0|max:99999999.99',
 
-            'docDimensions.length'  => 'required_if:service.service,Document|numeric',
-            'docDimensions.width'   => 'required_if:service.service,Document|numeric',
-            'docDimensions.height'  => 'required_if:service.service,Document|numeric',
-            'docDimensions.weight'  => 'required_if:service.service,Document|numeric',
+            'invoices'                      => 'required_if:service.service,Parcel|nullable|array',
+            'invoices.*.invoiceNumber'      => 'required_if:service.service,Parcel|string|max:255',
+            'invoices.*.invoiceAmount'      => 'required_if:service.service,Parcel|numeric|min:0|max:99999999.99',
+            'invoices.*.ewayBill'           => 'nullable|string|max:255',
+
+            'docDimensions.length'  => 'required_if:service.service,Document|numeric|min:0.01|max:99999999.99',
+            'docDimensions.width'   => 'required_if:service.service,Document|numeric|min:0.01|max:99999999.99',
+            'docDimensions.height'  => 'required_if:service.service,Document|numeric|min:0.01|max:99999999.99',
+            'docDimensions.weight'  => 'required_if:service.service,Document|numeric|min:0.01|max:99999999.99',
+            'docDimensions.volWeight' => 'nullable|numeric|min:0|max:99999999.99',
 
             'rates'                         => 'nullable|array',
-            'rates.cft'                     => 'nullable|decimal:0,2',
-            'rates.chargeableWeight'        => 'nullable|numeric',
-            'rates.packageYield'            => 'nullable|numeric',
-            'rates.freight'                 => 'nullable|numeric',
-            'rates.fuel'                    => 'nullable|numeric',
-            'rates.awbFee'                  => 'nullable|numeric',
-            'rates.fov'                     => 'nullable|numeric',
+            'rates.cft'                     => 'nullable|decimal:0,2|min:0|max:99999999.99',
+            'rates.chargeableWeight'        => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.packageYield'            => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.freight'                 => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.fuel'                    => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.awbFee'                  => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.fov'                     => 'nullable|numeric|min:0|max:99999999.99',
             'rates.insurance'               => 'nullable|in:owner,carrier',
-            'rates.carrierInsurance'        => 'nullable|numeric',
-            'rates.fod'                     => 'nullable|numeric',
-            'rates.dod'                     => 'nullable|numeric',
-            'rates.oda'                     => 'nullable|numeric',
-            'rates.handling'                => 'nullable|numeric',
-            'rates.dcc'                     => 'nullable|numeric',
-            'rates.pickupcharges'           => 'nullable|numeric',
-            'rates.deliverycharges'         => 'nullable|numeric',
-            'rates.total'                   => 'nullable|numeric',
-            'rates.gst'                     => 'nullable|numeric',
-            'rates.grandTotal'              => 'nullable|numeric',
+            'rates.carrierInsurance'        => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.fod'                     => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.dod'                     => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.oda'                     => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.handling'                => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.dcc'                     => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.pickupcharges'           => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.deliverycharges'         => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.otherCharges'            => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.premiumCharges'          => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.total'                   => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.gst'                     => 'nullable|numeric|min:0|max:99999999.99',
+            'rates.grandTotal'              => 'nullable|numeric|min:0|max:99999999.99',
         ]);
+
+        if ($shipment->status === 'booked' && $data['status'] === 'draft') {
+            return response()->json(['message' => 'A booked shipment cannot be moved back to draft.'], 422);
+        }
 
         try {
             DB::beginTransaction();
@@ -409,9 +431,9 @@ class ShipmentController extends Controller
                                             : $shipment->branch_id, // don't allow branch change for non-admins
                 'customer_id'           => $cust['customerId'] ?? null,
                 'status'                => $data['status'],
-                'service_type'          => $s['serviceType'] ?? null,
+                'service_type'          => $s['serviceType'] ?? 'Surface',
                 'service'               => $s['service'],
-                'payment_mode'          => $s['paymentMode'] ?? null,
+                'payment_mode'          => $s['paymentMode'] ?? 'Regular',
                 'customer_reference'    => $s['customerRef'] ?? null,
                 'parcel_content'        => $s['parcelContent'] ?? null,
 
@@ -427,11 +449,13 @@ class ShipmentController extends Controller
                 'shipper_pincode'       => $sh['shipperPincode'] ?? null,
 
                 'consignee_name'        => $con['consigneeName'],
+                'receiver_name'         => $con['receiverName'] ?? null,
                 'consignee_phone'       => $con['consigneePhone'] ?? null,
                 'consignee_gst'         => $con['consigneeGst'] ?? null,
                 'consignee_address_line1' => $con['consigneeAddLine1'] ?? null,
                 'consignee_address_line2' => $con['consigneeAddLine2'] ?? null,
                 'consignee_city'        => $con['consigneeAddCity'] ?? null,
+                'consignee_state_id'    => $con['consigneeState'] ?? null,
                 'consignee_pincode'     => $con['consigneePincode'] ?? null,
 
                 'special_instructions'  => $data['specialInstruction'] ?? null,
@@ -451,6 +475,7 @@ class ShipmentController extends Controller
                         'height'    => $p['height'],
                         'weight'    => $p['weight'],
                         'num_boxes' => $p['numBoxes'],
+                        'volumetric_weight' => $p['volWeight'] ?? null,
                     ])->toArray()
                 );
             } elseif ($s['service'] === 'Document' && !empty($data['docDimensions'])) {
@@ -461,7 +486,7 @@ class ShipmentController extends Controller
                     'height'             => $doc['height'],
                     'weight'             => $doc['weight'],
                     'num_boxes'          => 1,
-                    'volumetric_weight'  => round(($doc['length'] * $doc['width'] * $doc['height']) / 27000, 2),
+                    'volumetric_weight'  => $doc['volWeight'] ?? round(($doc['length'] * $doc['width'] * $doc['height']) / 27000, 2),
                 ]);
             }
 
@@ -499,6 +524,8 @@ class ShipmentController extends Controller
                         'dcc'               => $data['rates']['dcc'] ?? 0,
                         'pickup_charges'    => $data['rates']['pickupcharges'] ?? 0,
                         'delivery_charges'  => $data['rates']['deliverycharges'] ?? 0,
+                        'other_charges'     => $data['rates']['otherCharges'] ?? 0,
+                        'premium_charges'   => $data['rates']['premiumCharges'] ?? 0,
                         'total'             => $data['rates']['total'] ?? 0,
                         'gst'               => $data['rates']['gst'] ?? 0,
                         'grand_total'       => $data['rates']['grandTotal'] ?? 0,
@@ -563,58 +590,8 @@ class ShipmentController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Failed to update shipment', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Failed to update shipment', 'error' => $this->errorDetail($e)], 500);
         }
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Shipment $shipment)
-    {
-        //
-    }
-
-    public function updateStatus(Request $request, Shipment $shipment): JsonResponse
-    {
-        $data = $request->validate([
-            'status' => 'required|in:booked,picked_up,in_transit,at_hub,out_for_delivery,delivered,exception,cancelled',
-            'notes'  => 'nullable|string',
-        ]);
-
-        DB::beginTransaction();
-        try {
-            $shipment->update([
-                'status'    => $data['status'],
-                'booked_at' => $data['status'] === 'booked' && !$shipment->booked_at ? now() : $shipment->booked_at,
-            ]);
-
-            ShipmentEvent::create([
-                'shipment_id' => $shipment->id,
-                'event_type'  => $data['status'],
-                'branch_id'   => auth()->user()->rel_id,
-                'notes'       => $data['notes'] ?? null,
-                'created_by'  => auth()->id(),
-            ]);
-
-            DB::commit();
-            return response()->json([
-                'message' => 'Status updated!',
-                'data'    => $shipment->load('events'),
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['message' => 'Failed to update status'], 500);
-        }
-    }
-
-    public function tracking(Shipment $shipment): JsonResponse
-    {
-        return response()->json([
-            'awb_number' => $shipment->awb_number,
-            'status'     => $shipment->status,
-            'events'     => $shipment->events()->with(['branch', 'createdBy'])->get(),
-        ]);
     }
 
     public function track(string $awb)
@@ -636,27 +613,62 @@ class ShipmentController extends Controller
                 'booked_at'         => $shipment->booked_at,
                 'origin_branch'     => $shipment->branch?->name,
                 'shipper_city'      => $shipment->shipper_city,
-                'consignee_name'    => $shipment->consignee_name,
+                'consignee_name'    => $this->maskName($shipment->consignee_name),
                 'consignee_city'    => $shipment->consignee_city,
-                'consignee_pincode' => $shipment->consignee_pincode,
                 'events'            => $shipment->events->map(fn($e) => [
                     'status'     => $e->event_type,
-                    'notes'      => $e->notes,
                     'timestamp'  => $e->created_at,
                 ]),
             ]
         ]);
     }
 
+    /** Booking/editing is a head-office and branch activity; warehouse staff only move shipments. */
+    private function denyWarehouseRoles(): void
+    {
+        abort_if(
+            auth()->user()->hasAnyRole(['warehouse-admin', 'warehouse-employee']),
+            403,
+            'Warehouse users cannot book or edit shipments.'
+        );
+    }
+
+    /** Non head-office users may only book for customers of their own branch. */
+    private function ownCustomerRule(): \Closure
+    {
+        return function ($attribute, $value, $fail) {
+            if (! $value || $this->isHeadOffice()) {
+                return;
+            }
+            $branchId = \App\Models\Customer::whereKey($value)->value('branch_id');
+            if ($branchId === null || (int) $branchId !== (int) auth()->user()->owner_id) {
+                $fail('The selected customer does not belong to your branch.');
+            }
+        };
+    }
+
+    /** "Rahul Sharma" -> "R**** S*****" for the unauthenticated tracking endpoint. */
+    private function maskName(?string $name): ?string
+    {
+        if (! $name) {
+            return null;
+        }
+        return collect(preg_split('/\s+/', trim($name)))
+            ->map(fn ($w) => mb_substr($w, 0, 1) . str_repeat('*', max(mb_strlen($w) - 1, 0)))
+            ->implode(' ');
+    }
+
     private function resolveIntraState(Shipment $shipment): bool
     {
         $branchStateName    = $shipment->branch?->location?->state?->name;
-        $consigneeStateName = $shipment->consignee_state;
-    
+        $consigneeStateName = $shipment->consignee_state_id
+            ? State::find($shipment->consignee_state_id)?->name
+            : null;
+
         if (!$branchStateName || !$consigneeStateName) {
             return false;
         }
-    
+
         return strtolower(trim($branchStateName)) === strtolower(trim($consigneeStateName));
     }
 }

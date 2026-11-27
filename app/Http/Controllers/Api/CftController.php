@@ -25,7 +25,7 @@ class CftController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'cft_value' => 'required|decimal:1,2|min:5',
+            'cft_value' => 'required|decimal:0,2|min:5|max:99999999.99',
         ]);
 
         $cft = Cft::create($data);
@@ -37,20 +37,12 @@ class CftController extends Controller
     }
 
     /**
-     * Display the specified resource.
-     */
-    public function show(Cft $cft)
-    {
-        //
-    }
-
-    /**
      * Update the specified resource in storage.
      */
     public function update(Request $request, Cft $cft)
     {
         $data = $request->validate([
-            'cft_value' => 'required|decimal:1,2|min:5',
+            'cft_value' => 'required|decimal:0,2|min:5|max:99999999.99',
         ]);
 
         $cft->update($data);

@@ -17,7 +17,7 @@ class PincodeController extends Controller
     public function check(Request $request): JsonResponse
     {
         $request->validate([
-            'pincode' => 'required|string|max:6',
+            'pincode' => 'required|digits:6',
         ]);
 
         $pincode = trim($request->query('pincode'));

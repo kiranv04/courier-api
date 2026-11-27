@@ -46,7 +46,7 @@ return new class extends Migration
         ]);
  
         // Step 3: drop the new columns.
-        Schema::table('branches', function (Blueprint $table) {
+        Schema::table('warehouses', function (Blueprint $table) {
             $table->dropConstrainedForeignId('state_id');
             $table->dropColumn([
                 'address_line_1',

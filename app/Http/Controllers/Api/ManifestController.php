@@ -25,6 +25,11 @@ class ManifestController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $this->validateFilters($request, [
+            'type'   => 'nullable|in:pickup,dispatch,inbound,outbound,delivery',
+            'status' => 'nullable|in:open,closed',
+        ]);
+
         $user   = auth()->user();
         $query  = Manifest::with(['createdBy', 'deliveryAgent'])
             ->withCount('shipments')
@@ -58,6 +63,8 @@ class ManifestController extends Controller
 
     public function show(Manifest $manifest): JsonResponse
     {
+        $this->authorizeManifest($manifest);
+
         $manifest->load([
             'createdBy',
             'deliveryAgent',
@@ -75,10 +82,32 @@ class ManifestController extends Controller
         $data = $request->validate([
             'type'             => 'required|in:pickup,dispatch,inbound,outbound,delivery',
             'shipment_ids'     => 'required|array|min:1',
-            'shipment_ids.*'   => 'required|integer|exists:shipments,id',
-            'destination_type' => 'required_if:type,dispatch,outbound|nullable|string',
-            'destination_id'   => 'required_if:type,dispatch,outbound|nullable|integer',
-            'delivery_agent_id'=> 'required_if:type,delivery|nullable|exists:users,id',
+            'shipment_ids.*'   => 'required|integer|distinct|exists:shipments,id',
+            'destination_type' => 'required_if:type,dispatch,outbound|nullable|in:App\Models\Branch,App\Models\Warehouse',
+            'destination_id'   => [
+                'required_if:type,dispatch,outbound', 'nullable', 'integer',
+                function ($attribute, $value, $fail) use ($request) {
+                    $type = $request->input('destination_type');
+                    if (!$type || !$value) {
+                        return;
+                    }
+                    $table = $type === 'App\Models\Warehouse' ? 'warehouses' : 'branches';
+                    if (!DB::table($table)->where('id', $value)->exists()) {
+                        $fail("The selected destination does not exist in {$table}.");
+                    }
+                },
+            ],
+            'delivery_agent_id'=> [
+                'required_if:type,delivery', 'nullable', 'exists:users,id',
+                function ($attribute, $value, $fail) {
+                    if (!$value) {
+                        return;
+                    }
+                    if (!User::find($value)?->hasRole('branch-delivery')) {
+                        $fail('The selected delivery agent must have the branch-delivery role.');
+                    }
+                },
+            ],
             'notes'            => 'nullable|string|max:500',
         ]);
 
@@ -89,15 +118,22 @@ class ManifestController extends Controller
             ? ($user->hasAnyRole(['warehouse-admin', 'warehouse-employee']) ? 'at_hub' : 'at_branch')
             : $config['to'];
 
-        // Verify all selected shipments are in the correct status
-        $shipments = Shipment::whereIn('id', $data['shipment_ids'])
-            ->whereIn('status', $fromStatuses)
+        // Verify all selected shipments are in the correct status AND at the caller's location
+        $shipments = $this->eligibleQuery($user, $data['type'])
+            ->whereIn('id', $data['shipment_ids'])
             ->get();
 
         if ($shipments->count() !== count($data['shipment_ids'])) {
             return response()->json([
                 'message' => 'One or more shipments are not in the correct status for this manifest type.',
             ], 422);
+        }
+
+        if ($data['type'] === 'delivery' && ! $user->hasAnyRole(['super-admin', 'admin'])) {
+            $agent = User::find($data['delivery_agent_id']);
+            if ($agent->owner_type !== \App\Models\Branch::class || (int) $agent->owner_id !== (int) $user->owner_id) {
+                return response()->json(['message' => 'The delivery agent must belong to your branch.'], 422);
+            }
         }
 
         try {
@@ -175,13 +211,15 @@ class ManifestController extends Controller
             DB::rollBack();
             return response()->json([
                 'message' => 'Failed to create manifest',
-                'error'   => $e->getMessage(),
+                'error'   => $this->errorDetail($e),
             ], 500);
         }
     }
 
     public function close(Manifest $manifest): JsonResponse
     {
+        $this->authorizeManifest($manifest, originOnly: true);
+
         if ($manifest->status === 'closed') {
             return response()->json(['message' => 'Manifest is already closed'], 422);
         }
@@ -200,8 +238,14 @@ class ManifestController extends Controller
             'type' => 'required|in:pickup,dispatch,inbound,outbound,delivery',
         ]);
 
-        $user         = auth()->user();
-        $type         = $request->query('type');
+        return response()->json([
+            'data' => $this->eligibleQuery(auth()->user(), $request->query('type'))->get(),
+        ]);
+    }
+
+    /** Shipments in the right status for a manifest type, limited to the user's location. */
+    private function eligibleQuery(User $user, string $type)
+    {
         $config       = $this->typeConfig[$type];
         $fromStatuses = $config['from'];
 
@@ -223,11 +267,7 @@ class ManifestController extends Controller
                     ? 'App\\Models\\Warehouse'
                     : 'App\\Models\\Branch';
 
-                $latestEventIds = ShipmentEvent::select(DB::raw('MAX(id) as id'))
-                    ->groupBy('shipment_id')
-                    ->pluck('id');
-
-                $eligibleIds = ShipmentEvent::whereIn('id', $latestEventIds)
+                $eligibleIds = ShipmentEvent::latestPerShipment()
                     ->where('destination_type', $entityType)
                     ->where('destination_id', $user->owner_id)
                     ->pluck('shipment_id');
@@ -236,11 +276,7 @@ class ManifestController extends Controller
 
             } elseif ($type === 'delivery') {
                 // Shipments currently AT this branch (latest event is at_branch here)
-                $latestEventIds = ShipmentEvent::select(DB::raw('MAX(id) as id'))
-                    ->groupBy('shipment_id')
-                    ->pluck('id');
-
-                $eligibleIds = ShipmentEvent::whereIn('id', $latestEventIds)
+                $eligibleIds = ShipmentEvent::latestPerShipment()
                     ->where('entity_type', 'App\\Models\\Branch')
                     ->where('entity_id', $user->owner_id)
                     ->where('event_type', 'at_branch')
@@ -250,11 +286,7 @@ class ManifestController extends Controller
 
             } elseif ($type === 'outbound') {
                 // Shipments currently AT this warehouse
-                $latestEventIds = ShipmentEvent::select(DB::raw('MAX(id) as id'))
-                    ->groupBy('shipment_id')
-                    ->pluck('id');
-
-                $eligibleIds = ShipmentEvent::whereIn('id', $latestEventIds)
+                $eligibleIds = ShipmentEvent::latestPerShipment()
                     ->where('entity_type', 'App\\Models\\Warehouse')
                     ->where('entity_id', $user->owner_id)
                     ->where('event_type', 'at_hub')
@@ -268,6 +300,6 @@ class ManifestController extends Controller
             }
         }
 
-        return response()->json(['data' => $query->get()]);
+        return $query;
     }
 }

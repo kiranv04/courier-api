@@ -83,13 +83,14 @@ class LocationController extends Controller
         ]);
     }
 
-    public function actrivate($id): JsonResponse 
+    public function activate($id): JsonResponse
     {
-        $model = Location::findOr($id);
-        $model->update(['is_active' => true]);
+        $location = Location::findOrFail($id);
+        $location->update(['is_active' => true]);
 
         return response()->json([
-            'message' => 'Location reactivated!'
-        ]);    
+            'message' => 'Location reactivated!',
+            'data' => $location
+        ]);
     }
 }
